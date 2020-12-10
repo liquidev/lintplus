@@ -47,6 +47,12 @@ lint+ aims to fix all of the above problems.
 Download `lint+.lua` into your `plugins` folder. Then, pick whatever linters you
 need and download them into the `plugins` folder.
 
+If you want to use plugins designed for the other `linter`, you will also need
+to download the compatibility plugin `linter.lua` *from this repository*.
+Keep in mind that plugins designed for `linter` will not work as well as lint+
+plugins, because of `linter`'s lack of multiple severity levels. All warnings
+reported by `linter` linters will be reported with the `warning` level.
+
 lint+ will add a command `lint+:lint`, which upon execution, will run the
 appropriate linter command for the current view and update messages accordingly.
 
