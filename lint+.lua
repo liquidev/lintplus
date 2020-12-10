@@ -95,6 +95,20 @@ local lint = {}
 lint.index = {}
 
 
+local function match_any(str, patts)
+  if type(patts) == "string" then
+    patts = { patts }
+  end
+
+  for _, patt in ipairs(patts) do
+    if str:match(patt) then
+      return true
+    end
+  end
+  return false
+end
+
+
 function lint.get_linter_for_doc(doc)
   if not doc.filename then
     return nil
@@ -102,7 +116,7 @@ function lint.get_linter_for_doc(doc)
 
   local file = system.absolute_path(doc.filename)
   for _, linter in pairs(lint.index) do
-    if file:match(linter.filename) then
+    if match_any(file, linter.filename) then
       return linter
     end
   end
@@ -113,10 +127,16 @@ local function process_line(doc, linter, line)
   local lp = doc.__lintplus
   local file = system.absolute_path(doc.filename)
   local ok, outfile, lineno, columnno, kind, message =
-    linter.procedure.interpreter(line)
+    linter.procedure.interpreter(file, line)
 
   if not ok then return end
   if outfile ~= file then return end
+
+  assert(type(outfile) == "string")
+  assert(type(lineno) == "number")
+  assert(type(columnno) == "number")
+  assert(type(kind) == "string")
+  assert(type(message) == "string")
 
   if lp.messages[lineno] == nil or
      kind_priority[lp.messages[lineno].kind] < kind_priority[kind]
@@ -157,8 +177,7 @@ function lint.check(doc)
         process_line(doc, linter, table.concat(line_buffer))
         line_buffer = {}
         coroutine.yield(0)
-      elseif char == '\r' then -- nop
-      else
+      elseif char ~= '\r' then
         table.insert(line_buffer, char)
         -- this slows the linting process a bit but should help reduce the
         -- lagginess due to blocking I/O
@@ -347,34 +366,6 @@ end
 
 --- LINTER CREATION UTILITIES ---
 
-local pattern_magics = {
-  ['^'] = true,
-  ['$'] = true,
-  ['('] = true,
-  [')'] = true,
-  ['%'] = true,
-  ['.'] = true,
-  ['['] = true,
-  [']'] = true,
-  ['*'] = true,
-  ['+'] = true,
-  ['-'] = true,
-  ['?'] = true,
-}
-
-local function escape_pattern(patt)
-  local result = {}
-  for i = 1, #patt do
-    local c = patt:sub(i, i)
-    local e = c
-    if pattern_magics[c] then
-      e = '%'..c
-    end
-    table.insert(result, e)
-  end
-  return table.concat(result)
-end
-
 
 function lint.command(cmd)
   return function (filename)
@@ -391,17 +382,17 @@ function lint.interpreter(i)
   }
   local strip_pattern = i.strip
 
-  return function (line)
+  return function (_, line)
     for kind, patt in pairs(patterns) do
       assert(
         type(patt) == "string",
         "lint+: interpreter pattern must be a string")
-      local ok, _, file, line, column, message = line:find(patt)
-      if ok then
+      local file, ln, column, message = line:match(patt)
+      if file then
         if strip_pattern then
           message = message:gsub(strip_pattern, "")
         end
-        return true, file, tonumber(line), tonumber(column), kind, message
+        return true, file, tonumber(ln), tonumber(column), kind, message
       end
     end
     return false

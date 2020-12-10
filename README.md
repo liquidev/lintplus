@@ -2,6 +2,8 @@
 
 An improved linting plugin for [lite](https://github.com/rxi/lite).
 
+Includes compatibility layer for [`linter`](https://github.com/drmargarido/linters).
+
 ## Screenshots
 
 ![1st screenshot](screenshots/1.png)
@@ -93,8 +95,6 @@ Refer to each plugin's source code for more information.
   end is. It will highlight the correct line and column, though.
 - Just like `linter`, using it on Windows will be quite annoying because Lua's
   `io.popen` opens the lint command in a `cmd.exe` window.
-- It's not compatible with existing `linter` linters, but that should be a
-  relatively easy fix.
 
 Problems related to `io.popen` *may* get fixed if I started using an external
 native library for reading output from the linter, but currently I don't really
