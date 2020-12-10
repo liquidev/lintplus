@@ -11,6 +11,7 @@ through code for errors.
 </p>
 
 <br>
+
 ![2nd screenshot](screenshots/2.png)
 <p align="center">
 The status view shows either the first error, or the full message of the error
