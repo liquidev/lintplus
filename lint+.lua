@@ -398,6 +398,9 @@ function lint.interpreter(i)
         "lint+: interpreter pattern must be a string")
       local ok, _, file, line, column, message = line:find(patt)
       if ok then
+        if strip_pattern then
+          message = message:gsub(strip_pattern, "")
+        end
         return true, file, tonumber(line), tonumber(column), kind, message
       end
     end
