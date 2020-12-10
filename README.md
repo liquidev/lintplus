@@ -2,6 +2,21 @@
 
 An improved linting plugin for [lite](https://github.com/rxi/lite).
 
+## Screenshots
+
+![1st screenshot](screenshots/1.png)
+<p align="center">
+Features ErrorLens-style warnings and error messages for quickly scanning
+through code for errors.
+</p>
+
+![2nd screenshot](screenshots/2.png)
+<p align="center">
+The status view shows either the first error, or the full message of the error
+under your text cursor. No mouse interaction needed!
+</p>
+
+
 ## Motivation
 
 There were a few problems I had with the existing `linter` plugin:
