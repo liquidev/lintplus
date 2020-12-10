@@ -1,6 +1,6 @@
 # lint+
 
-An improved linting plugin for lite.
+An improved linting plugin for [lite](https://github.com/rxi/lite).
 
 ## Motivation
 
