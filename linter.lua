@@ -17,7 +17,7 @@ function linter.add_language(t)
       command = lintplus.command(
         t.command
           :gsub("%$FILENAME", "$filename")
-          :gsub("%$ARGS", t.args)
+          :gsub("%$ARGS", table.concat(t.args, ' '))
       ),
 
       -- can't use the lintplus interpreter simply because it doesn't work

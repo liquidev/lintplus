@@ -86,6 +86,32 @@ All options are unset (`nil`) by default, so eg. setting
 Individual plugins may also look for options in the `config.lint` table.
 Refer to each plugin's source code for more information.
 
+### Styling
+
+The screenshots above use a theme with extra colors for the linter's messages.
+The default color is the same color used for literals, which isn't always what
+you want. Most of the time you want to have some clear visual distinction
+between severity levels, so lint+ is fully stylable.
+
+- `style.lint`
+  - table:
+    - `hint`: Color - the color used for hints
+    - `warning`: Color - the color used for warnings
+    - `error`: Color - the color used for errors
+
+Example:
+
+```lua
+local style = require "common.style"
+style.lint = {
+  hint = style.syntax["function"],
+  warning = style.syntax["operator"],
+  error = { common.color "#FF3333" }
+}
+```
+
+As with config, you need to provide all or no colors.
+
 ## Known problems
 
 - Despite its asyncness, it still lags your editor a tiny bit when linting.

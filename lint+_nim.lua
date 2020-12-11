@@ -18,7 +18,7 @@ elseif PLATFORM == "Linux" then
 end
 
 local cmd = "nim --listFullPaths --stdout "
-if nullfile == nil or lintplus.config.use_nimcheck then
+if nullfile == nil or not lintplus.config.use_nimc then
   cmd = cmd.."check $filename"
 else
   cmd = cmd.."--errorMax:0 -o:"..nullfile.." c $filename"
