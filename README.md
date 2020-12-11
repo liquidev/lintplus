@@ -112,6 +112,109 @@ style.lint = {
 
 As with config, you need to provide all or no colors.
 
+## Creating new linters
+
+Just like `linter`, lint+ allows you to create new linters for languages not
+supported out of the box. The API is very simple:
+
+```lua
+Severity: enum {
+  "hint",
+  "warning",
+  "error",
+}
+
+lintplus.add(linter_name: string)(linter: table {
+  filename: pattern,
+  procedure: table {
+    command: function (filename: string): string,
+      -- Returns the lint command for the given filename.
+    interpreter: function (filename, line: string):
+      (ok: bool,
+       filename: string, line, column: number,
+       kind: Severity, message: string)
+      -- Interprets a line from the lint command.
+      -- Returns `false` when the line is not valid output, or `true` and the
+      -- rest of arguments when the line was correctly interpreted as a message
+      -- line.
+  }
+})
+```
+
+Because writing command and interpreter functions can quickly get tedious, there
+are some helpers that return pre-built functions for you:
+
+```lua
+lintplus.command(cmd: string)
+  -- Returns a function that replaces "$filename" in the given string with the
+  -- filename passed to it.
+lintplus.interpreter(spec: table {
+  hint: pattern or nil,
+  warning: pattern or nil,
+  error: pattern or nil,
+    -- Defines patterns for all the severity levels. Each pattern must have
+    -- four captures: the first one being the filename, the second and third
+    -- being the line and column, and the fourth being the message.
+    -- When any of these are nil, the interpreter simply will not produce the
+    -- given severity levels.
+  strip: pattern or nil,
+    -- Defines a pattern for stripping unnecessary information from the message
+    -- capture from one of the previously defined patterns. When this is `nil`,
+    -- nothing is stripped and the message remains as-is.
+})
+```
+
+An example linter built with these primitives:
+
+```lua
+lintplus.add("nim") {
+  filename = "%.nim$",
+  procedure = {
+    command = lintplus.command "nim check --listFullPaths --stdout $filename",
+    interpreter = lintplus.interpreter {
+      -- The format for these three in Nim is almost exactly the same:
+      hint = "(.-)%((%d+), (%d+)%) Hint: (.+)",
+      warning = "(.-)%((%d+), (%d+)%) Warning: (.+)",
+      error = "(.-)%((%d+), (%d+)%) Error: (.+)",
+      -- We want to strip annotations like [XDeclaredButNotUsed] from the end:
+      strip = "%s%[%w+%]$",
+    },
+  },
+}
+```
+
+Note that unlike `linter`, lint+ does not define a standard way for passing
+user-defined arguments to the lint command. The main reason for this is because
+`io.popen` opens the program in the user's shell, and every shell behaves
+differently, so supporting this would be an escaping nightmare.
+`linter` does this in a very unsafe, and honestly wrong way, by simply
+table.concating the user-defined table of strings with spaces. This is a very
+bad and unsafe idea, because it imposes an assumption that every string is a
+separate argument on the user, but that assumption is obviously wrong. A case
+like `{"Hello World"}` showcases this perfectly, because contrary to common
+sense, two arguments `"Hello"` and `"World"` are passed to the lint command.
+
+Instead of a solution common across all linters, each linter should provide its
+own, preferably being just a simple string config option like this:
+
+```lua
+...
+    command = lintplus.command(
+      "luacheck --formatter=plain " ..
+      lintplus.config.luacheck_args ..
+      " $filename"
+    )
+```
+
+Then the user provides arguments like so:
+
+```
+config.lint.luacheck_args = "--max-line-length=80 --std=love"
+```
+
+which doesn't hide that these arguments are really just a string concatenation
+to the lint command.
+
 ## Known problems
 
 - Despite its asyncness, it still lags your editor a tiny bit when linting.
@@ -131,6 +234,7 @@ As with config, you need to provide all or no colors.
 Problems related to `io.popen` *may* get fixed if I started using an external
 native library for reading output from the linter, but currently I don't really
 want to hassle with luarocks.
+
 
 ## Development
 
