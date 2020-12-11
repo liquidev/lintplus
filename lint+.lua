@@ -146,6 +146,7 @@ local function process_line(doc, linter, line)
       column = columnno,
       message = message,
     }
+    core.redraw = true
   end
 end
 
@@ -238,6 +239,25 @@ function Doc:remove(line1, column1, line2, column2)
 end
 
 
+local function dup_color(color)
+  return { color[1], color[2], color[3], color[4] }
+end
+
+
+local function draw_fading_rect(x, y, w, h, color, invert)
+  local col = dup_color(color)
+  for xx = x, x + w do
+    local dx = xx - x
+    local t = dx / w
+    if invert then
+      t = 1 - t
+    end
+    col[4] = color[4] * t
+    renderer.draw_rect(xx, y, 1, h, col)
+  end
+end
+
+
 local DocView_draw_line_text = DocView.draw_line_text
 function DocView:draw_line_text(idx, x, y)
   DocView_draw_line_text(self, idx, x, y)
@@ -259,11 +279,24 @@ function DocView:draw_line_text(idx, x, y)
 
   local msgx = font:get_width(self.doc.lines[idx]) + w * 3
   local text = msg.message
-  local linew = msgx + font:get_width(text)
-  for px = x + colx, x + linew, 2 do
-    renderer.draw_rect(px, yy, 1, 1, color)
+  local textw = font:get_width(text)
+  local linew = msgx + textw
+  local lens_style = config.lint.lens_style or "dots"
+
+  if lens_style == "dots" then
+    for px = x + colx, x + linew, 2 do
+      renderer.draw_rect(px, yy, 1, 1, color)
+    end
+  elseif lens_style == "fade" then
+    local fadew = 48 * SCALE
+    local transparent = dup_color(color)
+    transparent[4] = transparent[4] * 0.1
+    draw_fading_rect(x + colx, yy, fadew, 1, color, true)
+    draw_fading_rect(x + msgx - fadew, yy, fadew, 1, color, false)
+    renderer.draw_rect(x + msgx, yy, textw, 1, color)
+    renderer.draw_rect(x + colx, yy, msgx, 1, transparent)
   end
-  renderer.draw_text(font, msg.message, x + msgx, y, color)
+  renderer.draw_text(font, text, x + msgx, y, color)
 end
 
 
