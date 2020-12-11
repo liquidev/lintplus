@@ -129,8 +129,8 @@ local function process_line(doc, linter, line)
   local ok, outfile, lineno, columnno, kind, message =
     linter.procedure.interpreter(file, line)
 
-  if not ok then return end
-  if outfile ~= file then return end
+  if not ok then return false end
+  if outfile ~= file then return false end
 
   assert(type(outfile) == "string")
   assert(type(lineno) == "number")
@@ -147,7 +147,9 @@ local function process_line(doc, linter, line)
       message = message,
     }
     core.redraw = true
+    return true
   end
+  return false
 end
 
 
@@ -168,25 +170,36 @@ function lint.check(doc)
   local lp = doc.__lintplus
   lp.messages = {}
 
+  local line_count = 0
   core.add_thread(function ()
     local file = system.absolute_path(doc.filename)
     local lc = io.popen(linter.procedure.command(file), 'r')
     local line_buffer = {}
+    local restrained = true
 
     for char in lc:lines(1) do
       if char == '\n' then
-        process_line(doc, linter, table.concat(line_buffer))
+        if process_line(doc, linter, table.concat(line_buffer)) then
+          restrained = false
+        end
         line_buffer = {}
-        coroutine.yield(0)
+        line_count = line_count + 1
+        if restrained or line_count % 32 == 0 then
+          coroutine.yield(0)
+          line_count = 0
+        end
       elseif char ~= '\r' then
         table.insert(line_buffer, char)
         -- this slows the linting process a bit but should help reduce the
         -- lagginess due to blocking I/O
-        if #line_buffer % 32 == 0 then
+        if restrained and #line_buffer % 32 == 0 then
           coroutine.yield(0)
         end
       end
     end
+
+    -- i always forget to close files :p
+    lc:close()
   end)
 end
 
