@@ -303,7 +303,7 @@ function DocView:draw_line_text(idx, x, y)
   elseif lens_style == "fade" then
     local fadew = 48 * SCALE
     local transparent = dup_color(color)
-    transparent[4] = transparent[4] * 0.1
+    transparent[4] = transparent[4] * 0.15
     draw_fading_rect(x + colx, yy, fadew, 1, color, true)
     draw_fading_rect(x + msgx - fadew, yy, fadew, 1, color, false)
     renderer.draw_rect(x + msgx, yy, textw, 1, color)

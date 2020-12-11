@@ -11,7 +11,7 @@
 
 --- IMPLEMENTATION ---
 
-local lintplus = require "plugins.lint+"
+local lintplus = require "plugins.lintplus"
 
 local nullfile
 if PLATFORM == "Windows" then

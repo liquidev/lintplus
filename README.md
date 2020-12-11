@@ -59,7 +59,7 @@ appropriate linter command for the current view and update messages accordingly.
 You may also want to add this to your `user/init.lua` to enable automatic
 linting upon opening/saving a file:
 ```lua
-local lintplus = require "plugins.lint+"
+local lintplus = require "plugins.lintplus"
 lintplus.setup.lint_on_doc_load()
 lintplus.setup.lint_on_doc_save()
 ```

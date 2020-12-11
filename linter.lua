@@ -5,7 +5,7 @@
 -- functionality: namely, they cannot use the three levels of severity.
 -- all messages will have the warning severity level.
 
-local lintplus = require "plugins.lint+"
+local lintplus = require "plugins.lintplus"
 
 local linter = {}
 local name_counter = 0

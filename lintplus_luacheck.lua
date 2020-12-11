@@ -7,7 +7,7 @@
 
 --- IMPLEMENTATION ---
 
-local lintplus = require "plugins.lint+"
+local lintplus = require "plugins.lintplus"
 
 lintplus.add("luacheck") {
   filename = "%.lua$",
