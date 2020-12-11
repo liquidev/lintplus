@@ -2,9 +2,12 @@
 
 --- CONFIG ---
 
--- config.lint.use_nimcheck
---   switches the linting backend from `nim c` to `nim check`
+-- config.lint.use_nimc: bool
+--   switches the linting backend from `nim check` to `nim c`. this can
+--   eliminate certain kinds of errors but is less safe due to `nim c` allowing
+--   staticExec
 
+-- extra arguments may be passed via a nim.cfg or config.nims.
 
 --- IMPLEMENTATION ---
 
