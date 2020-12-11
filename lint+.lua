@@ -402,8 +402,19 @@ end
 
 function lint.command(cmd)
   return function (filename)
-    return cmd:gsub('$filename', filename)
+    local c = cmd
+    if type(cmd) == "function" then
+      c = cmd()
+    end
+    return c:gsub('$filename', filename)
   end
+end
+
+
+function lint.args_command(cmd, config_option)
+  return lint.command(function ()
+    return cmd:gsub("$args", lint.config[config_option] or "")
+  end)
 end
 
 
@@ -432,12 +443,10 @@ function lint.interpreter(i)
   end
 end
 
-
-if type(config.lint) == "table" then
-  lint.config = config.lint
-else
-  lint.config = {}
+if type(config.lint) ~= "table" then
+  config.lint = {}
 end
+lint.config = config.lint
 
 
 --- END ---

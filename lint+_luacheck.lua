@@ -12,10 +12,9 @@ local lintplus = require "plugins.lint+"
 lintplus.add("luacheck") {
   filename = "%.lua$",
   procedure = {
-    command = lintplus.command(
-      "luacheck --formatter visual_studio " ..
-      (lintplus.config.luacheck_args or "") ..
-      " $filename"
+    command = lintplus.args_command(
+      "luacheck $args --formatter visual_studio $filename",
+      "luacheck_args"
     ),
     interpreter = lintplus.interpreter {
       warning = "(.-)%((%d+),(%d+)%) : warning .-: (.+)",

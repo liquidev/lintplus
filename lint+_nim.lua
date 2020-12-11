@@ -22,15 +22,15 @@ end
 
 local cmd = "nim --listFullPaths --stdout "
 if nullfile == nil or not lintplus.config.use_nimc then
-  cmd = cmd.."check $filename"
+  cmd = cmd.."$args check $filename"
 else
-  cmd = cmd.."--errorMax:0 -o:"..nullfile.." c $filename"
+  cmd = cmd.."$args -o:"..nullfile.." c $filename"
 end
 
 lintplus.add("nim") {
   filename = "%.nim$",
   procedure = {
-    command = lintplus.command(cmd),
+    command = lintplus.args_command(cmd, "nim_args"),
     interpreter = lintplus.interpreter {
       hint = "(.-)%((%d+), (%d+)%) Hint: (.+)",
       warning = "(.-)%((%d+), (%d+)%) Warning: (.+)",
