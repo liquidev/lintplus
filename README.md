@@ -204,11 +204,12 @@ own, preferably being just a simple string config option like this:
       lintplus.config.luacheck_args ..
       " $filename"
     )
+...
 ```
 
 Then the user provides arguments like so:
 
-```
+```lua
 config.lint.luacheck_args = "--max-line-length=80 --std=love"
 ```
 
