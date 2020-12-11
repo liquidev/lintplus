@@ -201,7 +201,7 @@ own, preferably being just a simple string config option like this:
 ...
     command = lintplus.command(
       "luacheck --formatter=plain " ..
-      lintplus.config.luacheck_args ..
+      (lintplus.config.luacheck_args or "") ..
       " $filename"
     )
 ...
