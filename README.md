@@ -194,20 +194,20 @@ separate argument on the user, but that assumption is obviously wrong. A case
 like `{"Hello World"}` showcases this perfectly, because contrary to common
 sense, two arguments `"Hello"` and `"World"` are passed to the lint command.
 
-Instead of a solution common across all linters, each linter should provide its
-own, preferably being just a simple string config option like this:
+lint+'s solution to this is a wrapper function over `lintplus.command`,
+called `lintplus.args_command`:
 
 ```lua
 ...
-    command = lintplus.command(
-      "luacheck --formatter=plain " ..
-      (lintplus.config.luacheck_args or "") ..
-      " $filename"
+    command = lintplus.args_command(
+      "luacheck $args --formatter=visual_studio $filename",
+      "luacheck_args"
     )
 ...
 ```
 
-Then the user provides arguments like so:
+The second argument to this function is the name of the field in the
+`config.lint` table. Then, the user provides arguments like so:
 
 ```lua
 config.lint.luacheck_args = "--max-line-length=80 --std=love"
