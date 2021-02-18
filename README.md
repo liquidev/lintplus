@@ -111,7 +111,7 @@ This library is written in Rust, so you will need to install it in order to
 compile it. Compiling `liteipc` should be as simple as executing one of these
 scripts, depending on your OS:
 
-- Windows: `liteipc/build-liteipc.bat`
+- Windows: `liteipc/build-liteipc.bat` (TODO)
 - Linux: `liteipc/build-liteipc.sh`
 - macOS is not currently supported. Please open a pull request updating the
   README if you're able to port the .sh script to support macOS dylib.
@@ -120,7 +120,7 @@ After building `liteipc`, there's still one thing left to do. That thing is
 recompiling lite to use dynamically linked Lua. The official distribution of
 lite links Lua statically, which prevents C libraries from loading properly.
 I'd recommend switching to [Lite XL](https://github.com/franko/lite-xl), which
-allows for linking to Lua dynamically.
+allows for linking to Lua dynamically during compilation.
 
 I'm not sure whether this process is required on Windows and macOS at all, but
 here's how to do it on Arch Linux:
