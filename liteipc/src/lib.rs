@@ -11,14 +11,11 @@ struct Process {
 
 impl Process {
     fn start(_: &Lua, command: Vec<String>) -> LuaResult<Process> {
-        let mut popen = match Popen::create(&command, PopenConfig {
+        let mut popen = Popen::create(&command, PopenConfig {
             stdout: Redirection::Pipe,
             stderr: Redirection::Merge,
             .. Default::default()
-        }) {
-            Ok(x) => x,
-            Err(e) => return Err(LuaError::RuntimeError(format!("{}", e))),
-        };
+        }).map_err(|e| LuaError::RuntimeError(format!("{}", e)))?;
         let comms = popen.communicate_start(None)
             .limit_time(Duration::default());
         Ok(Self {
