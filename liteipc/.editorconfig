@@ -1,0 +1,7 @@
+[**]
+end_of_line = lf
+
+[*.rs]
+indent_size = 4
+indent_style = spaces
+max_line_length = 120

@@ -6,8 +6,9 @@
 --   switches the linting backend from `nim check` to `nim c`. this can
 --   eliminate certain kinds of errors but is less safe due to `nim c` allowing
 --   staticExec
-
--- extra arguments may be passed via a nim.cfg or config.nims.
+-- config.lint.nim_args: string
+--   passes the specified arguments to the lint command.
+--   extra arguments may also be passed via a nim.cfg or config.nims.
 
 --- IMPLEMENTATION ---
 
@@ -20,12 +21,19 @@ elseif PLATFORM == "Linux" then
   nullfile = "/dev/null"
 end
 
-local cmd = "nim --listFullPaths --stdout "
+local cmd = {
+  "nim",
+  "--listFullPaths",
+  "--stdout",
+  lintplus.args,
+}
 if nullfile == nil or not lintplus.config.use_nimc then
-  cmd = cmd.."$args check $filename"
+  table.insert(cmd, "check")
 else
-  cmd = cmd.."$args -o:"..nullfile.." c $filename"
+  table.insert(cmd, "-o:" .. nullfile)
+  table.insert(cmd, "c")
 end
+table.insert(cmd, lintplus.filename)
 
 lintplus.add("nim") {
   filename = "%.nim$",

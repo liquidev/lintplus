@@ -13,7 +13,11 @@ lintplus.add("luacheck") {
   filename = "%.lua$",
   procedure = {
     command = lintplus.args_command(
-      "luacheck $args --formatter visual_studio $filename",
+      { "luacheck",
+        lintplus.args,
+        "--formatter",
+        "visual_studio",
+        lintplus.filename },
       "luacheck_args"
     ),
     interpreter = lintplus.interpreter {

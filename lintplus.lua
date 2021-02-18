@@ -66,12 +66,14 @@
 -- messages with lower priorities get overwritten by messages with higher
 -- priorities
 local kind_priority = {
+  info = -1,
   hint = 0,
   warning = 1,
   error = 2,
 }
 
 local default_kind_pretty_names = {
+  info = "I",
   hint = "H",
   warning = "W",
   error = "E",
@@ -82,6 +84,7 @@ local default_kind_pretty_names = {
 
 
 local command = require "core.command"
+local common = require "core.common"
 local config = require "core.config"
 local core = require "core"
 local style = require "core.style"
@@ -89,6 +92,9 @@ local style = require "core.style"
 local Doc = require "core.doc"
 local DocView = require "core.docview"
 local StatusView = require "core.statusview"
+
+local liteipc_loader = require "plugins.lintplus.liteipc"
+local liteipc = liteipc_loader.sync()
 
 
 local lint = {}
@@ -115,9 +121,9 @@ function lint.get_linter_for_doc(doc)
   end
 
   local file = system.absolute_path(doc.filename)
-  for _, linter in pairs(lint.index) do
+  for name, linter in pairs(lint.index) do
     if match_any(file, linter.filename) then
-      return linter
+      return linter, name
     end
   end
 end
@@ -126,30 +132,35 @@ end
 local function process_line(doc, linter, line)
   local lp = doc.__lintplus
   local file = system.absolute_path(doc.filename)
-  local ok, outfile, lineno, columnno, kind, message =
-    linter.procedure.interpreter(file, line)
 
-  if not ok then return false end
-  if outfile ~= file then return false end
+  local had_messages = false
 
-  assert(type(outfile) == "string")
-  assert(type(lineno) == "number")
-  assert(type(columnno) == "number")
-  assert(type(kind) == "string")
-  assert(type(message) == "string")
+  local iterator = linter.procedure.interpreter(file, line)
+  if iterator == "bail" then return iterator end
 
-  if lp.messages[lineno] == nil or
-     kind_priority[lp.messages[lineno].kind] < kind_priority[kind]
-  then
-    lp.messages[lineno] = {
-      kind = kind,
-      column = columnno,
-      message = message,
-    }
-    core.redraw = true
-    return true
+  for outfile, lineno, columnno, kind, message in iterator do
+    if outfile == file then -- TODO: support project-wide errors
+      assert(type(outfile) == "string")
+      assert(type(lineno) == "number")
+      assert(type(columnno) == "number")
+      assert(type(kind) == "string")
+      assert(type(message) == "string")
+
+      if lp.messages[lineno] == nil or
+         kind_priority[lp.messages[lineno].kind] < kind_priority[kind]
+      then
+        lp.messages[lineno] = {
+          kind = kind,
+          column = columnno,
+          message = message,
+        }
+        core.redraw = true
+        had_messages = true
+      end
+    end
   end
-  return false
+
+  return had_messages
 end
 
 
@@ -158,48 +169,51 @@ function lint.check(doc)
     return
   end
 
-  local linter = lint.get_linter_for_doc(doc)
+  local linter, linter_name = lint.get_linter_for_doc(doc)
   if linter == nil then
     core.error("no linter available for the given filetype")
     return
+  end
+
+  if doc.__lintplus then
+    doc.__lintplus.threadinfo.abort = true
   end
 
   doc.__lintplus = {
     line_count = #doc.lines
   }
   local lp = doc.__lintplus
+  local threadinfo = { abort = false }
   lp.messages = {}
+  lp.threadinfo = threadinfo
 
-  local line_count = 0
+  local function report_error(msg)
+    core.error(
+      "lint+/" .. linter_name .. ": " ..
+      doc.filename .. ": " .. msg)
+  end
+
+  local file = system.absolute_path(doc.filename)
+  local process = liteipc.start_process(linter.procedure.command(file))
   core.add_thread(function ()
-    local file = system.absolute_path(doc.filename)
-    local lc = io.popen(linter.procedure.command(file), 'r')
-    local line_buffer = {}
-    local restrained = true
-
-    for char in lc:lines(1) do
-      if char == '\n' then
-        if process_line(doc, linter, table.concat(line_buffer)) then
-          restrained = false
+    while true do
+      local exit, code = process:poll(function (line)
+        process_line(doc, linter, line)
+      end)
+      if exit ~= nil then
+        -- the only OK exit condition is ("exit", _)
+        -- the exit code is ignored because the linter is allowed to fail
+        if exit == "signal" then
+          report_error("linter exited with signal " .. code)
+        elseif exit == "other" then
+          report_error("linter exited with error code " .. code)
+        elseif exit == "undetermined" then
+          report_error("linter exited with an undetermined error")
         end
-        line_buffer = {}
-        line_count = line_count + 1
-        if restrained or line_count % 32 == 0 then
-          coroutine.yield(0)
-          line_count = 0
-        end
-      elseif char ~= '\r' then
-        table.insert(line_buffer, char)
-        -- this slows the linting process a bit but should help reduce the
-        -- lagginess due to blocking I/O
-        if restrained and #line_buffer % 32 == 0 then
-          coroutine.yield(0)
-        end
+        break
       end
+      coroutine.yield(0)
     end
-
-    -- i always forget to close files :p
-    lc:close()
   end)
 end
 
@@ -307,7 +321,7 @@ function DocView:draw_line_text(idx, x, y)
     draw_fading_rect(x + colx, yy, fadew, 1, color, true)
     draw_fading_rect(x + msgx - fadew, yy, fadew, 1, color, false)
     renderer.draw_rect(x + msgx, yy, textw, 1, color)
-    renderer.draw_rect(x + colx, yy, msgx, 1, transparent)
+    renderer.draw_rect(x + colx, yy, msgx - colx, 1, transparent)
   end
   renderer.draw_text(font, text, x + msgx, y, color)
 end
@@ -374,6 +388,7 @@ command.add(DocView, {
 
 --- LINTER PLUGINS ---
 
+
 function lint.add(name)
   return function (linter)
     lint.index[name] = linter
@@ -382,6 +397,7 @@ end
 
 
 --- SETUP ---
+
 
 lint.setup = {}
 
@@ -409,30 +425,59 @@ function lint.setup.lint_on_doc_save()
 
 end
 
+function lint.enable_async()
+  local ok, err = core.try(function ()
+    liteipc = liteipc_loader.async()
+  end)
+  if not ok then
+    core.log_quiet("additional error details: \n%s", err)
+    core.error(
+      "lint+: could not enable async mode. double-check your installation")
+  end
+end
+
 
 --- LINTER CREATION UTILITIES ---
 
 
+lint.filename = {}
+lint.args = {}
+
+
 function lint.command(cmd)
   return function (filename)
-    local c = cmd
-    if type(cmd) == "function" then
-      c = cmd()
+    local c = {}
+    for i, arg in ipairs(cmd) do
+      if arg == lint.filename then
+        c[i] = filename
+      else
+        c[i] = arg
+      end
     end
-    return c:gsub('$filename', filename)
+    return c
   end
 end
 
 
 function lint.args_command(cmd, config_option)
-  return lint.command(function ()
-    return cmd:gsub("$args", lint.config[config_option] or "")
-  end)
+  local c = {}
+  for _, arg in ipairs(cmd) do
+    if arg == lint.args then
+      local args = lint.config[config_option] or {}
+      for _, a in ipairs(args) do
+        table.insert(c, a)
+      end
+    else
+      table.insert(c, arg)
+    end
+  end
+  return lint.command(c)
 end
 
 
 function lint.interpreter(i)
   local patterns = {
+    info = i.info,
     hint = i.hint,
     warning = i.warning,
     error = i.error,
@@ -440,21 +485,28 @@ function lint.interpreter(i)
   local strip_pattern = i.strip
 
   return function (_, line)
-    for kind, patt in pairs(patterns) do
-      assert(
-        type(patt) == "string",
-        "lint+: interpreter pattern must be a string")
-      local file, ln, column, message = line:match(patt)
-      if file then
-        if strip_pattern then
-          message = message:gsub(strip_pattern, "")
+    local line_processed = false
+    return function ()
+      if line_processed then
+        return nil
+      end
+      for kind, patt in pairs(patterns) do
+        assert(
+          type(patt) == "string",
+          "lint+: interpreter pattern must be a string")
+        local file, ln, column, message = line:match(patt)
+        if file then
+          if strip_pattern then
+            message = message:gsub(strip_pattern, "")
+          end
+          line_processed = true
+          return file, tonumber(ln), tonumber(column), kind, message
         end
-        return true, file, tonumber(ln), tonumber(column), kind, message
       end
     end
-    return false
   end
 end
+
 
 if type(config.lint) ~= "table" then
   config.lint = {}
