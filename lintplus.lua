@@ -47,6 +47,7 @@ lint.fs = require "plugins.lintplus.fsutil"
 
 lint.index = {}
 lint.messages = {}
+lint.running = 0
 
 
 function lint.get_linter_for_doc(doc)
@@ -142,6 +143,7 @@ function lint.check(doc)
   local file = system.absolute_path(doc.filename)
   local process = liteipc.start_process(linter.procedure.command(file))
   core.add_thread(function ()
+    lint.running = lint.running + 1
     -- poll the process for lines of output
     while true do
       local exit, code = process:poll(function (line)
@@ -168,6 +170,7 @@ function lint.check(doc)
         table.sort(messages, compare_message_priorities)
       end
     end
+    lint.running = lint.running - 1
   end)
 end
 
@@ -254,8 +257,6 @@ local function draw_lens_underline(x, y, width, color)
     lens_style(x, y, width, color)
   end
 end
-
-local a, b
 
 local function find_smallest_column(messages)
   local column = math.huge
@@ -362,6 +363,12 @@ function StatusView:get_items()
         end
       end
     end
+  end
+
+  if lint.running > 0 then
+    local r = { "linting…", style.dim, self.separator2, style.text }
+    table_add(r, right)
+    right = r
   end
 
   return left, right
