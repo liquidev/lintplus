@@ -1,3 +1,7 @@
+-- liteipc - async IPC for lite
+
+local fs = require "plugins.lintplus.fsutil"
+
 local liteipc_loader = {}
 
 -- a fallback to support io.popen in case the user didn't install the
@@ -91,26 +95,8 @@ end
 function liteipc_loader.async()
   local dir_sep, path_sep, sub = package.config:match("(.-)\n(.-)\n(.-)\n")
   local this_file = debug.getinfo(1, 'S').source
-  if PLATFORM == "Windows" then
-    this_file = this_file:gsub('\\', '/')
-  end
 
-  local function parent_directory(path)
-    path = path:match("^(.-)/*$")
-    local last_slash_pos = -1
-    for i = #path, 1, -1 do
-      if path:sub(i, i) == '/' then
-        last_slash_pos = i
-        break
-      end
-    end
-    if last_slash_pos < 0 then
-      return nil
-    end
-    return path:sub(1, last_slash_pos - 1)
-  end
-
-  local this_dir = parent_directory(this_file):match("[@=](.*)")
+  local this_dir = fs.parent_directory(this_file):match("[@=](.*)")
   package.cpath =
     package.cpath .. path_sep .. this_dir .. dir_sep .. sub .. ".so"
 

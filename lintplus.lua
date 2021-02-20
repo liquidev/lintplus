@@ -3,64 +3,8 @@
 -- licensed under the MIT license
 
 
---- INTRODUCTION ---
-
--- a few reasons for why this and not the existing linter plugin:
--- · it can only show warnings
--- · it doesn't show error messages after lines, you have to hover over the
---   warning first
--- · it spam-runs the linter command, but Nim (and possibly other languages)
---   compiles relatively slowly
--- · it is not async, so when the lint command takes its sweet time your editor
---   freezes completely
--- · it doesn't display the first or current error message on the status view
--- this linter aims to fix any and all of the above problems.
--- however, there are still some issues with it:
--- · despite its asyncness, it still lags your editor a tiny bit when linting.
---   this cannot be fixed easily due to the fact that io.popen operations are
---   blocking, so if the lint command doesn't output anything for a while the
---   linter thread will stall until it gets some output
--- · due to the fact that it shows the most important message at the end of the
---   line, displaying more than one message per line is really difficult with
---   the limited horizontal real estate, so it can only display one message per
---   line. usually this isn't a problem though
--- · it is unable to display the offending token, simply because linter error
---   messages do not contain that information. it will highlight the line and
---   column, though.
-
---- CONFIG ---
-
--- config.lint.kind_pretty_names: {hint: string, warning: string, error: string}
---   defines the pretty names for displaying messages on the status view
-
---- CREATING LINTERS ---
-
--- the lint+ API is fairly simple:
---
---   -- the following example is a Nim linter
---   local lintplus = require "plugins.lint+"
---   lintplus.add {
---     filename = "%.nim$",
---     -- the linting procedure is a special table containing info on how to
---     -- run the lint command and interpret its output
---     procedure = {
---       command = lintplus.command "nim --listFullPaths --stdout $filename",
---       interpreter = lintplus.interpreter {
---         -- for this example, we use the general hint/warning/error
---         -- interpreter. this field is a function that gets called for each
---         -- line of the lint command's output
---         hint = "(.-)%((%d+), (%d+)%) Hint: (.+)",
---         warning = hint = "(.-)%((%d+), (%d+)%) Warning: (.+)",
---         error = "(.-)%((%d+), (%d+)%) Error: (.+)",
---         -- we can also add a strip action. this will remove the specified
---         -- pattern from the output
---         strip = "%s%[%w+%]$",
---       }
---     },
---   }
-
-
 --- STATIC CONFIG ---
+
 
 -- note that due to the nature of how this linter displays errors,
 -- messages with lower priorities get overwritten by messages with higher
@@ -98,21 +42,11 @@ local liteipc = liteipc_loader.sync()
 
 
 local lint = {}
+lint.fs = require "plugins.lintplus.fsutil"
+
+
 lint.index = {}
-
-
-local function match_any(str, patts)
-  if type(patts) == "string" then
-    patts = { patts }
-  end
-
-  for _, patt in ipairs(patts) do
-    if str:match(patt) then
-      return true
-    end
-  end
-  return false
-end
+lint.messages = {}
 
 
 function lint.get_linter_for_doc(doc)
@@ -122,15 +56,38 @@ function lint.get_linter_for_doc(doc)
 
   local file = system.absolute_path(doc.filename)
   for name, linter in pairs(lint.index) do
-    if match_any(file, linter.filename) then
+    if common.match_pattern(file, linter.filename) then
       return linter, name
     end
   end
 end
 
 
+local function clear_messages(linter)
+  local clear = {}
+  for filename, _ in pairs(lint.messages) do
+    if common.match_pattern(filename, linter.filename) then
+      table.insert(clear, filename)
+    end
+  end
+  for _, filename in ipairs(clear) do
+    lint.messages[filename] = nil
+  end
+end
+
+
+local function add_message(filename, line, column, kind, message)
+  lint.messages[filename] = lint.messages[filename] or {}
+  lint.messages[filename][line] = lint.messages[filename][line] or {}
+  table.insert(lint.messages[filename][line], {
+    column = column,
+    kind = kind,
+    message = message,
+  })
+end
+
+
 local function process_line(doc, linter, line)
-  local lp = doc.__lintplus
   local file = system.absolute_path(doc.filename)
 
   local had_messages = false
@@ -146,21 +103,17 @@ local function process_line(doc, linter, line)
       assert(type(kind) == "string")
       assert(type(message) == "string")
 
-      if lp.messages[lineno] == nil or
-         kind_priority[lp.messages[lineno].kind] < kind_priority[kind]
-      then
-        lp.messages[lineno] = {
-          kind = kind,
-          column = columnno,
-          message = message,
-        }
-        core.redraw = true
-        had_messages = true
-      end
+      add_message(outfile, lineno, columnno, kind, message)
+      core.redraw = true
     end
   end
 
   return had_messages
+end
+
+
+local function compare_message_priorities(a, b)
+  return kind_priority[a.kind] > kind_priority[b.kind]
 end
 
 
@@ -175,17 +128,10 @@ function lint.check(doc)
     return
   end
 
-  if doc.__lintplus then
-    doc.__lintplus.threadinfo.abort = true
-  end
-
   doc.__lintplus = {
-    line_count = #doc.lines
+    line_count = #doc.lines,
   }
-  local lp = doc.__lintplus
-  local threadinfo = { abort = false }
-  lp.messages = {}
-  lp.threadinfo = threadinfo
+  clear_messages(linter)
 
   local function report_error(msg)
     core.error(
@@ -196,13 +142,15 @@ function lint.check(doc)
   local file = system.absolute_path(doc.filename)
   local process = liteipc.start_process(linter.procedure.command(file))
   core.add_thread(function ()
+    -- poll the process for lines of output
     while true do
       local exit, code = process:poll(function (line)
         process_line(doc, linter, line)
       end)
       if exit ~= nil then
         -- the only OK exit condition is ("exit", _)
-        -- the exit code is ignored because the linter is allowed to fail
+        -- the exit code is ignored because the linter is allowed to return an
+        -- error
         if exit == "signal" then
           report_error("linter exited with signal " .. code)
         elseif exit == "other" then
@@ -214,6 +162,12 @@ function lint.check(doc)
       end
       coroutine.yield(0)
     end
+    -- after reading all lines, sort messages by priority in all files
+    for _, lines in pairs(lint.messages) do
+      for _, messages in pairs(lines) do
+        table.sort(messages, compare_message_priorities)
+      end
+    end
   end)
 end
 
@@ -223,20 +177,23 @@ local Doc_insert = Doc.insert
 function Doc:insert(line, column, text)
   Doc_insert(self, line, column, text)
 
+  if self.filename == nil then return end
   if line == math.huge then return end
 
+  local filename = system.absolute_path(self.filename)
+  local file_messages = lint.messages[filename]
   local lp = self.__lintplus
-  if lp ~= nil and #self.lines > lp.line_count then
-    local shift = #self.lines - lp.line_count
-    -- this sucks
-    for i = #self.lines, line, -1 do
-      if lp.messages[i] ~= nil then
-        lp.messages[i + shift] = lp.messages[i]
-        lp.messages[i] = nil
-      end
+  if file_messages == nil or lp == nil then return end
+  if #self.lines == lp.line_count then return end
+
+  local shift = #self.lines - lp.line_count
+  for i = #self.lines, line, -1 do
+    if file_messages[i] ~= nil then
+      file_messages[i + shift] = file_messages[i]
+      file_messages[i] = nil
     end
-    lp.line_count = #self.lines
   end
+  lp.line_count = #self.lines
 end
 
 
@@ -244,46 +201,79 @@ local Doc_remove = Doc.remove
 function Doc:remove(line1, column1, line2, column2)
   Doc_remove(self, line1, column1, line2, column2)
 
+  if line1 == line2 then return end
   if line2 == math.huge then return end
+  if self.filename == nil then return end
 
+  local filename = system.absolute_path(self.filename)
+  local file_messages = lint.messages[filename]
   local lp = self.__lintplus
-  if line1 ~= line2 and lp ~= nil then
-    local shift = lp.line_count - #self.lines
-    -- remove all messages in this range
-    local min, max = math.min(line1, line2), math.max(line1, line2)
-    for i = min, max do
-      lp.messages[i] = nil
+  if file_messages == nil or lp == nil then return end
+
+  local shift = lp.line_count - #self.lines
+
+  -- remove all messages in this range
+  local min, max = math.min(line1, line2), math.max(line1, line2)
+  for i = min, max do
+    file_messages[i] = nil
+  end
+
+  -- shift all of them up
+  for i = min, #self.lines do
+    if file_messages[i] ~= nil then
+      file_messages[i - shift] = file_messages[i]
+      file_messages[i] = nil
     end
-    -- shift all of them up
-    for i = min, #self.lines do
-      if lp.messages[i] ~= nil then
-        lp.messages[i - shift] = lp.messages[i]
-        lp.messages[i] = nil
-      end
+  end
+  lp.line_count = #self.lines
+end
+
+
+local lens_underlines = {
+
+  blank = function () end,
+
+  solid = function (x, y, width, color)
+    renderer.draw_rect(x, y, width, 1, color)
+  end,
+
+  dots = function (x, y, width, color)
+    for xx = x, x + width, 2 do
+      renderer.draw_rect(xx, y, 1, 1, color)
     end
-    lp.line_count = #self.lines
+  end,
+
+}
+
+local function draw_lens_underline(x, y, width, color)
+  local lens_style = config.lint.lens_style or "dots"
+  if type(lens_style) == "string" then
+    local fn = lens_underlines[lens_style] or lens_underlines.blank
+    fn(x, y, width, color)
+  elseif type(lens_style) == "function" then
+    lens_style(x, y, width, color)
   end
 end
 
+local a, b
 
-local function dup_color(color)
-  return { color[1], color[2], color[3], color[4] }
+local function find_smallest_column(messages)
+  local column = math.huge
+  for _, msg in ipairs(messages) do
+    if msg.column < column then
+      column = msg.column
+    end
+  end
+  return column
 end
 
-
-local function draw_fading_rect(x, y, w, h, color, invert)
-  local col = dup_color(color)
-  for xx = x, x + w do
-    local dx = xx - x
-    local t = dx / w
-    if invert then
-      t = 1 - t
-    end
-    col[4] = color[4] * t
-    renderer.draw_rect(xx, y, 1, h, col)
+local function get_or_default(t, index, default)
+  if t ~= nil and t[index] ~= nil then
+    return t[index]
+  else
+    return default
   end
 end
-
 
 local DocView_draw_line_text = DocView.draw_line_text
 function DocView:draw_line_text(idx, x, y)
@@ -293,37 +283,35 @@ function DocView:draw_line_text(idx, x, y)
   if lp == nil then return end
 
   local yy = y + self:get_line_text_y_offset() + self:get_line_height() - 1
-  local msg = lp.messages[idx]
-  if msg == nil then return end
+  local file_messages = lint.messages[system.absolute_path(self.doc.filename)]
+  if file_messages == nil then return end
+  local messages = file_messages[idx]
+  if messages == nil then return end
+
+  local underline_start = find_smallest_column(messages)
 
   local font = self:get_font()
-  local color = style.syntax["literal"]
+  local underline_color = style.accent
   if style.lint ~= nil then
-    color = style.lint[msg.kind]
+    underline_color = style.lint[messages[1].kind]
   end
-  local colx = font:get_width(self.doc.lines[idx]:sub(1, msg.column - 1))
+  local line = self.doc.lines[idx]
+  local line_left = line:sub(1, underline_start - 1)
+  local line_right = line:sub(underline_start, -2)
+  local underline_x = font:get_width(line_left)
   local w = font:get_width('w')
 
-  local msgx = font:get_width(self.doc.lines[idx]) + w * 3
-  local text = msg.message
-  local textw = font:get_width(text)
-  local linew = msgx + textw
-  local lens_style = config.lint.lens_style or "dots"
-
-  if lens_style == "dots" then
-    for px = x + colx, x + linew, 2 do
-      renderer.draw_rect(px, yy, 1, 1, color)
+  local msg_x = x + w * 3 + underline_x + font:get_width(line_right)
+  for i, msg in ipairs(messages) do
+    local text_color = get_or_default(style.lint, msg.kind, underline_color)
+    msg_x = renderer.draw_text(font, msg.message, msg_x, y, text_color)
+    if i < #messages then
+      msg_x = renderer.draw_text(font, ",  ", msg_x, y, style.syntax.comment)
     end
-  elseif lens_style == "fade" then
-    local fadew = 48 * SCALE
-    local transparent = dup_color(color)
-    transparent[4] = transparent[4] * 0.15
-    draw_fading_rect(x + colx, yy, fadew, 1, color, true)
-    draw_fading_rect(x + msgx - fadew, yy, fadew, 1, color, false)
-    renderer.draw_rect(x + msgx, yy, textw, 1, color)
-    renderer.draw_rect(x + colx, yy, msgx - colx, 1, transparent)
   end
-  renderer.draw_text(font, text, x + msgx, y, color)
+
+  local underline_width = msg_x - x - underline_x
+  draw_lens_underline(x + underline_x, yy, underline_width, underline_color)
 end
 
 
@@ -348,10 +336,10 @@ function StatusView:get_items()
   then
     local doc = core.active_view.doc
     local line1, _, line2, _ = doc:get_selection()
-    local lp = doc.__lintplus
-    if lp then
-      if lp.messages[line1] and line1 == line2 then
-        local msg = lp.messages[line1]
+    local line_messages = lint.messages[system.absolute_path(doc.filename)]
+    if line_messages ~= nil then
+      if line_messages[line1] ~= nil and line1 == line2 then
+        local msg = line_messages[line1][1]
         table_add(left, {
           style.dim, self.separator2,
           kind_pretty_name(msg.kind), ": ",
@@ -359,7 +347,8 @@ function StatusView:get_items()
         })
       else
         local line, message = math.huge, nil
-        for ln, msg in pairs(lp.messages) do
+        for ln, messages in pairs(line_messages) do
+          local msg = messages[1]
           if msg.kind == "error" and ln < line  then
             line, message = ln, msg
           end
@@ -428,6 +417,7 @@ end
 function lint.enable_async()
   local ok, err = core.try(function ()
     liteipc = liteipc_loader.async()
+    core.log_quiet("lint+: using experimental async mode")
   end)
   if not ok then
     core.log_quiet("additional error details: \n%s", err)
@@ -460,18 +450,20 @@ end
 
 
 function lint.args_command(cmd, config_option)
-  local c = {}
-  for _, arg in ipairs(cmd) do
-    if arg == lint.args then
-      local args = lint.config[config_option] or {}
-      for _, a in ipairs(args) do
-        table.insert(c, a)
+  return function (filename)
+    local c = {}
+    for _, arg in ipairs(cmd) do
+      if arg == lint.args then
+        local args = lint.config[config_option] or {}
+        for _, a in ipairs(args) do
+          table.insert(c, a)
+        end
+      else
+        table.insert(c, arg)
       end
-    else
-      table.insert(c, arg)
     end
+    return lint.command(c)(filename)
   end
-  return lint.command(c)
 end
 
 

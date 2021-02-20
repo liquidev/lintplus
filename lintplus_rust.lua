@@ -19,32 +19,8 @@ local function no_op() end
 
 local function parent_directories(filename)
 
-  if PLATFORM == "Windows" then
-    -- jank
-    filename = filename:gsub('\\', '/')
-  end
-
-  local function parent_directory(path)
-    -- trim trailing slashes
-    path = path:match("^(.-)/*$")
-    -- find last slash
-    local last_slash_pos = -1
-    for i = #path, 1, -1 do
-      if path:sub(i, i) == '/' then
-        last_slash_pos = i
-        break
-      end
-    end
-    -- return nil if this is the root directory
-    if last_slash_pos < 0 then
-      return nil
-    end
-    -- trim everything up until the last slash
-    return path:sub(1, last_slash_pos - 1)
-  end
-
   return function ()
-    filename = parent_directory(filename)
+    filename = lintplus.fs.parent_directory(filename)
     return filename
   end
 
