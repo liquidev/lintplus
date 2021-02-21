@@ -144,7 +144,7 @@ local function compare_message_priorities(a, b)
 end
 
 local function compare_messages(a, b)
-  return a.column < b.column or compare_message_priorities(a, b)
+  return a.column > b.column or compare_message_priorities(a, b)
 end
 
 local function compare_rail_messages(a, b)
@@ -369,7 +369,8 @@ local function draw_gutter_rail(dv, index, messages)
 
   -- connect with lens
   local line_x = x + rw
-  for _, message in ipairs(rail) do
+  for i, message in ipairs(rail) do
+    -- connect with lens
     local lx, ly = dv:get_line_screen_position(message.line)
     local line_messages = messages.lines[message.line]
     local column = line_messages[1].column
@@ -379,18 +380,15 @@ local function draw_gutter_rail(dv, index, messages)
     ly = ly + lh - 1
     local line_w = dv:get_font():get_width(message_left) - line_x + lx
     renderutil.draw_dotted_line(x + rw + xoffset, ly, line_w, 'x', line_color)
+    -- draw curve
+    local _, y = dv:get_line_screen_position(message.line)
+    y = y + lh - rw + (i == 1 and rw - 1 or 0)
+    renderutil.draw_quarter_circle(x, y, rw, style.accent, i > 1)
   end
 
   -- draw vertical part
   local height = fin_y - start_y + 1
-  renderutil.draw_quarter_circle(x, start_y - rw, rw, style.accent)
   renderer.draw_rect(x, start_y, 1, height, style.accent)
-  for i = 2, #rail do
-    local message = rail[i]
-    local _, y = dv:get_line_screen_position(message.line)
-    y = y + lh - rw
-    renderutil.draw_quarter_circle(x, y, rw, style.accent, true)
-  end
 
 end
 
