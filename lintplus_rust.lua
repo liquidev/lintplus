@@ -40,8 +40,16 @@ end
 -- message processing
 
 
-local function process_message(message, out_messages, package_root)
+local function process_message(
+  context,
+  message,
+  out_messages,
+  package_root,
+  rail
+)
   local msg = message.message
+  local span = message.spans[1]
+
   local kind do
     local l = message.level
     if l == "error" or l == "warning" then
@@ -53,24 +61,59 @@ local function process_message(message, out_messages, package_root)
     end
   end
 
-  local span = message.spans[1]
+  local nonprimary_spans = 0
+  for _, sp in ipairs(message.spans) do
+    if not sp.is_primary then
+      nonprimary_spans = nonprimary_spans + 1
+    end
+  end
+
+  -- only assign a rail if there are children or multiple non-primary spans
+  if rail == nil and (#message.children > 0 or nonprimary_spans > 0) and
+     span ~= nil then
+    -- only assign a rail if the children are spread across multiple lines
+    local multiline = false
+    for _, child in ipairs(message.children) do
+      local child_span = child.spans[1]
+      if child_span ~= nil and child_span.line_start ~= span.line_start then
+        multiline = true
+        break
+      end
+    end
+    if multiline or nonprimary_spans > 0 then
+      print("assigned span to: ", msg)
+      rail = context:gutter_rail()
+    end
+  end
+
   if span ~= nil then
     local filename = package_root .. '/' .. span.file_name
     local line, column = span.line_start, span.column_start
-    table.insert(out_messages, { filename, line, column, kind, msg })
+    table.insert(out_messages, { filename, line, column, kind, msg, rail })
+  end
+
+  print(#message.spans)
+  for _, sp in ipairs(message.spans) do
+    print("adding span ", _)
+    if sp.label ~= nil and not sp.is_primary then
+      local filename = package_root .. '/' .. span.file_name
+      local line, column = sp.line_start, sp.column_start
+      table.insert(out_messages,
+                   { filename, line, column, "info", sp.label, rail })
+    end
   end
 
   for _, child in ipairs(message.children) do
-    process_message(child, out_messages, package_root)
+    process_message(context, child, out_messages, package_root, rail)
   end
 end
 
 
-local function get_messages(event)
+local function get_messages(context, event)
   -- filename, line, column, kind, message
   local messages = {}
   local package_root = find_package_root(event.target.src_path)
-  process_message(event.message, messages, package_root)
+  process_message(context, event.message, messages, package_root)
   return messages
 end
 
@@ -86,7 +129,7 @@ lintplus.add("rust") {
       "--message-format", "json",
       "--color", "never",
     },
-    interpreter = function (filename, line)
+    interpreter = function (filename, line, context)
       -- initial checks
       if line:match("^error: could not find `Cargo%.toml`") then
         core.error(
@@ -102,7 +145,7 @@ lintplus.add("rust") {
       if not ok then return no_op end
 
       if event.reason == "compiler-message" then
-        local messages = get_messages(event)
+        local messages = get_messages(context, event)
         local i = 1
 
         return function ()

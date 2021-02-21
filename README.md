@@ -219,21 +219,32 @@ Severity: enum {
   "error",    -- syntax or semantic errors that prevent compilation
 }
 
+LintContext: table {
+  :gutter_rail(): number
+    -- creates a new gutter rail and returns its index
+  :gutter_rail_count(): number
+    -- returns how many gutter rails have been created in this context
+  -- You may create additional fields in this table, but keys prefixed with _
+  -- are reserved by lint+.
+}
+
 lintplus.add(linter_name: string)(linter: table {
   filename: pattern,
   procedure: table {
     command: function (filename: string): {string},
       -- Returns the lint command for the given filename.
-    interpreter: (function (filename, line: string):
+    interpreter: (function (filename, line: string, context: LintContext):
       function ():
         nil or
         (filename: string, line, column: number,
-         kind: Severity, message: string)) or "bail"
+         kind: Severity, message: string, rail: number or nil)) or "bail"
       -- Creates and returns a message iterator, which yields all messages
       -- from the line.
       -- If the return value is "bail", reading the lint command is aborted
       -- immediately. This is done as a mitigation for processes that may take
       -- too long to execute or block indefinitely.
+      -- `rail` is optional and specifies the gutter rail to which the message
+      -- should be attached.
   }
 })
 ```
