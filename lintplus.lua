@@ -64,6 +64,7 @@ function lint.get_linter_for_doc(doc)
 end
 
 
+-- unused for now, because it was a bit buggy
 local function clear_messages(linter)
   local clear = {}
   for filename, _ in pairs(lint.messages) do
@@ -170,7 +171,7 @@ function lint.check(doc)
   doc.__lintplus = {
     line_count = #doc.lines,
   }
-  clear_messages(linter)
+--   clear_messages(linter)
   lint.messages[filename] = {
     context = context,
     lines = {},
@@ -451,7 +452,8 @@ function DocView:draw_line_text(idx, x, y)
   local lp = self.doc.__lintplus
   if lp == nil then return end
 
-  local yy = y + self:get_line_text_y_offset() + self:get_line_height() - 1
+  local _, yy = self:get_line_screen_position(idx)
+  yy = yy + self:get_line_height() - 1
   local file_messages = lint.messages[system.absolute_path(self.doc.filename)]
   if file_messages == nil then return end
   local messages = file_messages.lines[idx]
