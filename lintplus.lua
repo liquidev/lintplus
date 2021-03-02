@@ -6,9 +6,6 @@
 --- STATIC CONFIG ---
 
 
--- note that due to the nature of how this linter displays errors,
--- messages with lower priorities get overwritten by messages with higher
--- priorities
 local kind_priority = {
   info = -1,
   hint = 0,
