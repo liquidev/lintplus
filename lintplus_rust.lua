@@ -81,7 +81,6 @@ local function process_message(
       end
     end
     if multiline or nonprimary_spans > 0 then
-      print("assigned span to: ", msg)
       rail = context:gutter_rail()
     end
   end
@@ -92,9 +91,7 @@ local function process_message(
     table.insert(out_messages, { filename, line, column, kind, msg, rail })
   end
 
-  print(#message.spans)
   for _, sp in ipairs(message.spans) do
-    print("adding span ", _)
     if sp.label ~= nil and not sp.is_primary then
       local filename = package_root .. '/' .. span.file_name
       local line, column = sp.line_start, sp.column_start
@@ -125,6 +122,7 @@ lintplus.add("rust") {
   procedure = {
     mode = "project",
     command = lintplus.command {
+      set_cwd = true,
       "cargo", "check",
       "--message-format", "json",
       "--color", "never",

@@ -178,9 +178,11 @@ function lint.check(doc)
   local function report_error(msg)
     core.error(
       "lint+/" .. linter_name .. ": " ..
-      doc.filename .. ": " .. msg)
+      doc.filename .. ": " .. msg
+    )
   end
 
+  local cwd = lint.fs.parent_directory(filename)
   local process = liteipc.start_process(linter.procedure.command(filename))
   core.add_thread(function ()
     lint.running = lint.running + 1
@@ -314,12 +316,12 @@ end
 
 local renderutil = require "plugins.lintplus.renderutil"
 
-local function rail_width()
-  return common.round(style.padding.x / 2)
+local function rail_width(dv)
+  return dv:get_line_height() / 3 -- common.round(style.padding.x / 2)
 end
 
-local function rail_spacing()
-  return common.round(rail_width() / 4)
+local function rail_spacing(dv)
+  return common.round(rail_width(dv) / 4)
 end
 
 local DocView_get_gutter_width = DocView.get_gutter_width
@@ -329,7 +331,7 @@ function DocView:get_gutter_width()
     local file_messages = lint.messages[system.absolute_path(self.doc.filename)]
     if file_messages ~= nil then
       local rail_count = file_messages.context._rails
-      extra_width = rail_count * (rail_width() + rail_spacing())
+      extra_width = rail_count * (rail_width(self) + rail_spacing(self))
     end
   end
   return DocView_get_gutter_width(self) + extra_width
@@ -339,7 +341,7 @@ end
 local function get_gutter_rail_x(dv, index)
   return
     dv.position.x + dv:get_gutter_width() -
-    (rail_width() + rail_spacing()) * index + rail_spacing()
+    (rail_width(dv) + rail_spacing(dv)) * index + rail_spacing(dv)
 end
 
 local function get_message_group_color(messages)
@@ -350,6 +352,13 @@ local function get_message_group_color(messages)
   end
 end
 
+local function get_underline_y(dv, line)
+  local _, y = dv:get_line_screen_position(line)
+  local line_height = dv:get_line_height()
+  local extra_space = line_height - dv:get_font():get_height()
+  return y + line_height - extra_space / 2
+end
+
 local function draw_gutter_rail(dv, index, messages)
   local rail = messages.rails[index]
   if #rail < 2 then return end
@@ -358,35 +367,31 @@ local function draw_gutter_rail(dv, index, messages)
   local last_message = rail[#rail]
 
   local x = get_gutter_rail_x(dv, index)
-  local rw = rail_width()
-  local _, start_y = dv:get_line_screen_position(first_message.line)
-  local _, fin_y = dv:get_line_screen_position(last_message.line)
-  local lh = dv:get_line_height()
-  start_y = start_y + lh + rw - 1
-  fin_y = fin_y + lh - rw
+  local rw = rail_width(dv)
+  local start_y = get_underline_y(dv, first_message.line)
+  local fin_y = get_underline_y(dv, last_message.line)
 
   -- connect with lens
   local line_x = x + rw
   for i, message in ipairs(rail) do
     -- connect with lens
-    local lx, ly = dv:get_line_screen_position(message.line)
+    local lx, _ = dv:get_line_screen_position(message.line)
+    local ly = get_underline_y(dv, message.line)
     local line_messages = messages.lines[message.line]
     local column = line_messages[1].column
     local message_left = line_messages[1].message:sub(1, column - 1)
     local line_color = get_message_group_color(line_messages)
     local xoffset = (x + rw) % 2
-    ly = ly + lh - 1
     local line_w = dv:get_font():get_width(message_left) - line_x + lx
     renderutil.draw_dotted_line(x + rw + xoffset, ly, line_w, 'x', line_color)
     -- draw curve
-    local _, y = dv:get_line_screen_position(message.line)
-    y = y + lh - rw + (i == 1 and rw - 1 or 0)
-    renderutil.draw_quarter_circle(x, y, rw, style.accent, i > 1)
+    ly = ly - rw * (i == 1 and 0 or 1) + (i ~= 1 and 1 or 0)
+    renderutil.draw_quarter_circle(x, ly, rw, style.accent, i > 1)
   end
 
   -- draw vertical part
-  local height = fin_y - start_y + 1
-  renderer.draw_rect(x, start_y, 1, height, style.accent)
+  local height = fin_y - start_y + 1 - rw * 2
+  renderer.draw_rect(x, start_y + rw, 1, height, style.accent)
 
 end
 
@@ -449,8 +454,7 @@ function DocView:draw_line_text(idx, x, y)
   local lp = self.doc.__lintplus
   if lp == nil then return end
 
-  local _, yy = self:get_line_screen_position(idx)
-  yy = yy + self:get_line_height() - 1
+  local yy = get_underline_y(self, idx)
   local file_messages = lint.messages[system.absolute_path(self.doc.filename)]
   if file_messages == nil then return end
   local messages = file_messages.lines[idx]
@@ -467,11 +471,12 @@ function DocView:draw_line_text(idx, x, y)
   local w = font:get_width('w')
 
   local msg_x = x + w * 3 + underline_x + font:get_width(line_right)
+  local text_y = y + self:get_line_text_y_offset()
   for i, msg in ipairs(messages) do
     local text_color = get_or_default(style.lint, msg.kind, underline_color)
-    msg_x = renderer.draw_text(font, msg.message, msg_x, y, text_color)
+    msg_x = renderer.draw_text(font, msg.message, msg_x, text_y, text_color)
     if i < #messages then
-      msg_x = renderer.draw_text(font, ",  ", msg_x, y, style.syntax.comment)
+      msg_x = renderer.draw_text(font, ",  ", msg_x, text_y, style.syntax.comment)
     end
   end
 
