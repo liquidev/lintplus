@@ -80,12 +80,15 @@ local function add_message(filename, line, column, kind, message, rail)
   local lines, rails = file_messages.lines, file_messages.rails
   lines[line] = lines[line] or {}
   if rail ~= nil then
-    rails[rail] = rails[rail] or {}
-    table.insert(rails[rail], {
-      line = line,
-      column = column,
-      kind = kind,
-    })
+    rails[rail] = rails[rail] or { lines_taken = {} }
+    if not rails[rail].lines_taken[line] then
+      rails[rail].lines_taken[line] = true
+      table.insert(rails[rail], {
+        line = line,
+        column = column,
+        kind = kind,
+      })
+    end
   end
   table.insert(lines[line], {
     column = column,
