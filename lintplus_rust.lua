@@ -27,24 +27,28 @@ local function parent_directories(filename)
 end
 
 
-local function find_package_root(filename)
-  for dir in parent_directories(filename) do
-    local cargotoml = dir .. "/Cargo.toml"
-    if system.get_file_info(cargotoml) then
-      return dir
-    end
-  end
-end
-
-
 -- message processing
 
+local function message_spans_multiple_lines(message, line)
+  if #message.spans == 0 then return false end
+  for _, span in ipairs(message.spans) do
+    if span.line_start ~= line then
+      return true
+    end
+  end
+  for _, child in ipairs(message.children) do
+    local child_spans_multiple_lines = message_spans_multiple_lines(child, line)
+    if child_spans_multiple_lines then
+      return true
+    end
+  end
+  return false
+end
 
 local function process_message(
   context,
   message,
   out_messages,
-  package_root,
   rail
 )
   local msg = message.message
@@ -69,31 +73,22 @@ local function process_message(
   end
 
   -- only assign a rail if there are children or multiple non-primary spans
-  if rail == nil and (#message.children > 0 or nonprimary_spans > 0) and
-     span ~= nil then
-    -- only assign a rail if the children are spread across multiple lines
-    local multiline = false
-    for _, child in ipairs(message.children) do
-      local child_span = child.spans[1]
-      if child_span ~= nil and child_span.line_start ~= span.line_start then
-        multiline = true
-        break
+  if span ~= nil then
+    local filename = context.workspace_root .. '/' .. span.file_name
+    local line, column = span.line_start, span.column_start
+
+    if rail == nil then
+      if message_spans_multiple_lines(message, line) then
+        rail = context:create_gutter_rail()
       end
     end
-    if multiline or nonprimary_spans > 0 then
-      rail = context:gutter_rail()
-    end
-  end
 
-  if span ~= nil then
-    local filename = package_root .. '/' .. span.file_name
-    local line, column = span.line_start, span.column_start
     table.insert(out_messages, { filename, line, column, kind, msg, rail })
   end
 
   for _, sp in ipairs(message.spans) do
     if sp.label ~= nil and not sp.is_primary then
-      local filename = package_root .. '/' .. span.file_name
+      local filename = context.workspace_root .. '/' .. span.file_name
       local line, column = sp.line_start, sp.column_start
       table.insert(out_messages,
                    { filename, line, column, "info", sp.label, rail })
@@ -101,7 +96,7 @@ local function process_message(
   end
 
   for _, child in ipairs(message.children) do
-    process_message(context, child, out_messages, package_root, rail)
+    process_message(context, child, out_messages, rail)
   end
 end
 
@@ -109,8 +104,7 @@ end
 local function get_messages(context, event)
   -- filename, line, column, kind, message
   local messages = {}
-  local package_root = find_package_root(event.target.src_path)
-  process_message(context, event.message, messages, package_root)
+  process_message(context, event.message, messages)
   return messages
 end
 
@@ -120,16 +114,33 @@ end
 lintplus.add("rust") {
   filename = "%.rs$",
   procedure = {
-    mode = "project",
+
+    init = function (filename, context)
+      local process = lintplus.ipc.start_process({
+        "cargo", "locate-project", "--workspace"
+      }, lintplus.fs.parent_directory(filename))
+      while true do
+        local exit, _ = process:poll(function (line)
+          local ok, process_result = pcall(json.decode, line)
+          if not ok then return end
+          context.workspace_root =
+            lintplus.fs.parent_directory(process_result.root)
+        end)
+        if exit ~= nil then break end
+      end
+    end,
+
     command = lintplus.command {
       set_cwd = true,
       "cargo", "check",
       "--message-format", "json",
       "--color", "never",
+      "--tests",
     },
+
     interpreter = function (filename, line, context)
       -- initial checks
-      if line:match("^error: could not find `Cargo%.toml`") then
+      if context.workspace_root == nil then
         core.error(
           "lint+/rust: "..filename.." is not situated in a cargo crate"
         )
@@ -159,5 +170,6 @@ lintplus.add("rust") {
         return no_op
       end
     end,
+
   },
 }

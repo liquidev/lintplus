@@ -69,10 +69,14 @@ function liteipc_loader.sync()
     return table.concat(result, ' ')
   end
 
-  function liteipc.start_process(args)
+  function liteipc.start_process(args, cwd)
+    -- this solution with pushd and popd feels fragile af but i don't know of
+    -- any better way to make popen behave like i need it to
+    if cwd ~= nil then os.execute("pushd "..quote_shell(cwd)) end
     local proc = setmetatable({
       popen = io.popen(escape_args(args), 'r'),
     }, Process)
+    if cwd ~= nil then os.execute("popd") end
     return proc
   end
 

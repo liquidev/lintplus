@@ -9,11 +9,13 @@ struct Process {
     read_buffer: String,
 }
 
+
 impl Process {
-    fn start(_: &Lua, command: Vec<String>) -> LuaResult<Process> {
+    fn start(_: &Lua, (command, cwd): (Vec<String>, Option<String>)) -> LuaResult<Process> {
         let mut popen = Popen::create(&command, PopenConfig {
             stdout: Redirection::Pipe,
             stderr: Redirection::Merge,
+            cwd: cwd.map(|s| s.into()),
             .. Default::default()
         }).map_err(|e| LuaError::RuntimeError(format!("{}", e)))?;
         let comms = popen.communicate_start(None)

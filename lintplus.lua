@@ -40,6 +40,7 @@ local liteipc = liteipc_loader.sync()
 
 local lint = {}
 lint.fs = require "plugins.lintplus.fsutil"
+lint.ipc = liteipc
 
 
 lint.index = {}
@@ -126,17 +127,25 @@ end
 
 
 local LintContext = {}
-LintContext.__index = LintContext
 
 
-function LintContext:gutter_rail()
-  self._rails = self._rails + 1
-  return self._rails
+function LintContext:__index(key)
+  if self._user_context[key] ~= nil then
+    return self._user_context[key]
+  end
+  return rawget(LintContext, key)
+end
+
+
+function LintContext:create_gutter_rail()
+  local lp = self._doc.__lintplus
+  lp.rail_count = lp.rail_count + 1
+  return lp.rail_count
 end
 
 
 function LintContext:gutter_rail_count()
-  return self._rails
+  return self._doc.__lintplus.rail_count
 end
 
 
@@ -149,13 +158,11 @@ local function compare_messages(a, b)
 end
 
 local function compare_rail_messages(a, b)
-  return a.line < b.line or compare_message_priorities(a, b)
+  return a.line < b.line
 end
 
 function lint.check(doc)
-  if doc.filename == nil then
-    return
-  end
+  if doc.filename == nil then return end
 
   local linter, linter_name = lint.get_linter_for_doc(doc)
   if linter == nil then
@@ -165,11 +172,13 @@ function lint.check(doc)
 
   local filename = system.absolute_path(doc.filename)
   local context = setmetatable({
-    _rails = 0,
+    _doc = doc,
+    _user_context = doc.__lintplus_context,
   }, LintContext)
 
   doc.__lintplus = {
     line_count = #doc.lines,
+    rail_count = 0,
   }
 --   clear_messages(linter)
   lint.messages[filename] = {
@@ -185,13 +194,19 @@ function lint.check(doc)
     )
   end
 
-  local cwd = lint.fs.parent_directory(filename)
-  local process = liteipc.start_process(linter.procedure.command(filename))
+  local cmd, cwd = linter.procedure.command(filename), nil
+  if cmd.set_cwd then
+    cwd = lint.fs.parent_directory(filename)
+  end
+  local process = liteipc.start_process(cmd, cwd)
   core.add_thread(function ()
     lint.running = lint.running + 1
     -- poll the process for lines of output
     while true do
       local exit, code = process:poll(function (line)
+        if line:sub(1, 1) == '{' then
+          print(line)
+        end
         process_line(doc, linter, line, context)
       end)
       if exit ~= nil then
@@ -219,9 +234,43 @@ function lint.check(doc)
         table.sort(rail, compare_rail_messages)
       end
       file_messages.rails_sorted = true
+      core.redraw = true
+      coroutine.yield(0)
     end
     lint.running = lint.running - 1
   end)
+end
+
+
+-- inject initialization routines to documents
+
+local Doc_load, Doc_save = Doc.load, Doc.save
+
+local function init_linter_for_doc(doc)
+  local linter, _ = lint.get_linter_for_doc(doc)
+  doc.__lintplus_context = {}
+  if linter.procedure.init ~= nil then
+    linter.procedure.init(
+      system.absolute_path(doc.filename),
+      doc.__lintplus_context
+    )
+  end
+end
+
+function Doc:load(filename)
+  local old_filename = self.filename
+  Doc_load(self, filename)
+  if old_filename ~= filename then
+    init_linter_for_doc(self)
+  end
+end
+
+function Doc:save(filename)
+  local old_filename = self.filename
+  Doc_save(self, filename)
+  if old_filename ~= filename then
+    init_linter_for_doc(self)
+  end
 end
 
 
@@ -333,7 +382,7 @@ function DocView:get_gutter_width()
   if self.doc.filename ~= nil then
     local file_messages = lint.messages[system.absolute_path(self.doc.filename)]
     if file_messages ~= nil then
-      local rail_count = file_messages.context._rails
+      local rail_count = file_messages.context:gutter_rail_count()
       extra_width = rail_count * (rail_width(self) + rail_spacing(self))
     end
   end
@@ -571,9 +620,9 @@ lint.setup = {}
 
 function lint.setup.lint_on_doc_load()
 
-  local Doc_load = Doc.load
+  local doc_load = Doc.load
   function Doc:load(...)
-    Doc_load(self, ...)
+    doc_load(self, ...)
     if lint.get_linter_for_doc(self) ~= nil then
       lint.check(self)
     end
@@ -583,9 +632,9 @@ end
 
 function lint.setup.lint_on_doc_save()
 
-  local Doc_save = Doc.save
+  local doc_save = Doc.save
   function Doc:save(...)
-    Doc_save(self, ...)
+    doc_save(self, ...)
     if lint.get_linter_for_doc(self) ~= nil then
       lint.check(self)
     end
@@ -596,6 +645,7 @@ end
 function lint.enable_async()
   local ok, err = core.try(function ()
     liteipc = liteipc_loader.async()
+    lint.ipc = liteipc
     core.log_quiet("lint+: using experimental async mode")
   end)
   if not ok then
@@ -613,34 +663,43 @@ lint.filename = {}
 lint.args = {}
 
 
+local function map(tab, fn)
+  local result = {}
+  for k, v in pairs(tab) do
+    local mapped, mode = fn(k, v)
+    if mode == "append" then
+      table_add(result, mapped)
+    elseif type(k) == "number" then
+      table.insert(result, mapped)
+    else
+      result[k] = mapped
+    end
+  end
+  return result
+end
+
+
 function lint.command(cmd)
   return function (filename)
-    local c = {}
-    for i, arg in ipairs(cmd) do
-      if arg == lint.filename then
-        c[i] = filename
-      else
-        c[i] = arg
+    return map(cmd, function (k, v)
+      if type(k) == "number" and v == lint.filename then
+        return filename
       end
-    end
-    return c
+      return v
+    end)
   end
 end
 
 
 function lint.args_command(cmd, config_option)
   return function (filename)
-    local c = {}
-    for _, arg in ipairs(cmd) do
-      if arg == lint.args then
+    local c = map(cmd, function (k, v)
+      if type(k) == "number" and v == lint.args then
         local args = lint.config[config_option] or {}
-        for _, a in ipairs(args) do
-          table.insert(c, a)
-        end
-      else
-        table.insert(c, arg)
+        return args, "append"
       end
-    end
+      return v
+    end)
     return lint.command(c)(filename)
   end
 end
