@@ -204,9 +204,6 @@ function lint.check(doc)
     -- poll the process for lines of output
     while true do
       local exit, code = process:poll(function (line)
-        if line:sub(1, 1) == '{' then
-          print(line)
-        end
         process_line(doc, linter, line, context)
       end)
       if exit ~= nil then
@@ -248,6 +245,7 @@ local Doc_load, Doc_save = Doc.load, Doc.save
 
 local function init_linter_for_doc(doc)
   local linter, _ = lint.get_linter_for_doc(doc)
+  if linter == nil then return end
   doc.__lintplus_context = {}
   if linter.procedure.init ~= nil then
     linter.procedure.init(
@@ -332,13 +330,19 @@ function Doc:remove(line1, column1, line2, column2)
 
   -- remove all messages in this range
   local min, max = math.min(line1, line2), math.max(line1, line2)
+  -- edge case: deleting an empty line completely
+  print(line1, column1, line2, column2)
+  if line1 > line2 and column2 == #self.lines[line2] then
+    max = max - 1
+  end
   for i = min, max do
     lines[i] = nil
   end
 
   -- shift all line messages up
-  for i = min, #self.lines do
+  for i = min, lp.line_count do
     if lines[i] ~= nil then
+      print("shifting message on line "..i.." to line "..i-shift)
       lines[i - shift] = lines[i]
       lines[i] = nil
     end
@@ -349,10 +353,13 @@ function Doc:remove(line1, column1, line2, column2)
   for _, rail in ipairs(rails) do
     local remove_indices = {}
     for i, message in ipairs(rail) do
-      if message.line >= min and message.line <= max then
+      print("message on line "..message.line)
+      if message.line >= min and message.line < max then
         table.insert(remove_indices, i)
+        print(" - removing")
       elseif message.line > min then
         message.line = message.line - shift
+        print(" - shifting up by "..shift)
       end
     end
     for i = #remove_indices, 1, -1 do
@@ -430,15 +437,17 @@ local function draw_gutter_rail(dv, index, messages)
     local lx, _ = dv:get_line_screen_position(message.line)
     local ly = get_underline_y(dv, message.line)
     local line_messages = messages.lines[message.line]
-    local column = line_messages[1].column
-    local message_left = line_messages[1].message:sub(1, column - 1)
-    local line_color = get_message_group_color(line_messages)
-    local xoffset = (x + rw) % 2
-    local line_w = dv:get_font():get_width(message_left) - line_x + lx
-    renderutil.draw_dotted_line(x + rw + xoffset, ly, line_w, 'x', line_color)
-    -- draw curve
-    ly = ly - rw * (i == 1 and 0 or 1) + (i ~= 1 and 1 or 0)
-    renderutil.draw_quarter_circle(x, ly, rw, style.accent, i > 1)
+    if line_messages ~= nil then
+      local column = line_messages[1].column
+      local message_left = line_messages[1].message:sub(1, column - 1)
+      local line_color = get_message_group_color(line_messages)
+      local xoffset = (x + rw) % 2
+      local line_w = dv:get_font():get_width(message_left) - line_x + lx
+      renderutil.draw_dotted_line(x + rw + xoffset, ly, line_w, 'x', line_color)
+      -- draw curve
+      ly = ly - rw * (i == 1 and 0 or 1) + (i ~= 1 and 1 or 0)
+      renderutil.draw_quarter_circle(x, ly, rw, style.accent, i > 1)
+    end
   end
 
   -- draw vertical part

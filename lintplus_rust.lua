@@ -135,7 +135,7 @@ lintplus.add("rust") {
       "cargo", "check",
       "--message-format", "json",
       "--color", "never",
-      "--tests",
+      -- "--tests",
     },
 
     interpreter = function (filename, line, context)
