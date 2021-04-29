@@ -1,3 +1,5 @@
+-- lite-xl 1.16
+
 -- lint+ - an improved linter for lite
 -- copyright (C) lqdev, 2020
 -- licensed under the MIT license
@@ -45,7 +47,6 @@ lint.ipc = liteipc
 
 lint.index = {}
 lint.messages = {}
-lint.running = 0
 
 
 function lint.get_linter_for_doc(doc)
@@ -177,7 +178,6 @@ function lint.check(doc)
   }, LintContext)
 
   doc.__lintplus = {
-    line_count = #doc.lines,
     rail_count = 0,
   }
 --   clear_messages(linter)
@@ -200,7 +200,6 @@ function lint.check(doc)
   end
   local process = liteipc.start_process(cmd, cwd)
   core.add_thread(function ()
-    lint.running = lint.running + 1
     -- poll the process for lines of output
     while true do
       local exit, code = process:poll(function (line)
@@ -234,7 +233,6 @@ function lint.check(doc)
       core.redraw = true
       coroutine.yield(0)
     end
-    lint.running = lint.running - 1
   end)
 end
 
@@ -274,6 +272,14 @@ end
 
 -- inject hooks to Doc.insert and Doc.remove to shift messages around
 
+local function sort_positions(line1, col1, line2, col2)
+  if line1 > line2
+  or line1 == line2 and col1 > col2 then
+    return line2, col2, line1, col1, true
+  end
+  return line1, col1, line2, col2, false
+end
+
 local Doc_insert = Doc.insert
 function Doc:insert(line, column, text)
   Doc_insert(self, line, column, text)
@@ -285,64 +291,66 @@ function Doc:insert(line, column, text)
   local file_messages = lint.messages[filename]
   local lp = self.__lintplus
   if file_messages == nil or lp == nil then return end
-  if #self.lines == lp.line_count then return end
 
   -- shift line messages downwards
-  local shift = #self.lines - lp.line_count
+  local shift = 0
+  for _ in text:gmatch('\n') do
+    shift = shift + 1
+  end
+  if shift == 0 then return end
+  print("shifting messages "..shift.." lines downwards")
+
   local lines = file_messages.lines
   for i = #self.lines, line, -1 do
     if lines[i] ~= nil then
-      lines[i + shift] = lines[i]
-      lines[i] = nil
+      if not (i == line and lines[i][1].column < column) then
+        lines[i + shift] = lines[i]
+        lines[i] = nil
+      end
     end
   end
 
   -- shift rails downwards
   local rails = file_messages.rails
-  for _, rail in ipairs(rails) do
+  print(common.serialize(rails))
+  for _, rail in pairs(rails) do
     for _, message in ipairs(rail) do
+      print(message.line, line)
       if message.line >= line then
         message.line = message.line + shift
       end
     end
   end
-
-  -- update line count
-  lp.line_count = #self.lines
 end
 
-
-local Doc_remove = Doc.remove
-function Doc:remove(line1, column1, line2, column2)
-  Doc_remove(self, line1, column1, line2, column2)
-
+local function update_messages_after_removal(
+  doc,
+  line1, column1,
+  line2, column2
+)
   if line1 == line2 then return end
   if line2 == math.huge then return end
-  if self.filename == nil then return end
+  if doc.filename == nil then return end
 
-  local filename = system.absolute_path(self.filename)
+  local filename = system.absolute_path(doc.filename)
   local file_messages = lint.messages[filename]
-  local lp = self.__lintplus
+  local lp = doc.__lintplus
   if file_messages == nil or lp == nil then return end
 
-  local shift = lp.line_count - #self.lines
   local lines = file_messages.lines
 
+  line1, column1, line2, column2 =
+    sort_positions(line1, column1, line2, column2)
+  local shift = line2 - line1
+
   -- remove all messages in this range
-  local min, max = math.min(line1, line2), math.max(line1, line2)
-  -- edge case: deleting an empty line completely
-  print(line1, column1, line2, column2)
-  if line1 > line2 and column2 == #self.lines[line2] then
-    max = max - 1
-  end
-  for i = min, max do
+  for i = line1, line2 do
     lines[i] = nil
   end
 
   -- shift all line messages up
-  for i = min, lp.line_count do
+  for i = line1, #doc.lines do
     if lines[i] ~= nil then
-      print("shifting message on line "..i.." to line "..i-shift)
       lines[i - shift] = lines[i]
       lines[i] = nil
     end
@@ -350,24 +358,25 @@ function Doc:remove(line1, column1, line2, column2)
 
   -- remove all rail messages in this range
   local rails = file_messages.rails
-  for _, rail in ipairs(rails) do
+  for _, rail in pairs(rails) do
     local remove_indices = {}
     for i, message in ipairs(rail) do
-      print("message on line "..message.line)
-      if message.line >= min and message.line < max then
+      if message.line >= line1 and message.line < line2 then
         table.insert(remove_indices, i)
-        print(" - removing")
-      elseif message.line > min then
+      elseif message.line > line1 then
         message.line = message.line - shift
-        print(" - shifting up by "..shift)
       end
     end
     for i = #remove_indices, 1, -1 do
       table.remove(rail, remove_indices[i])
     end
   end
+end
 
-  lp.line_count = #self.lines
+local Doc_remove = Doc.remove
+function Doc:remove(line1, column1, line2, column2)
+  update_messages_after_removal(self, line1, column1, line2, column2)
+  Doc_remove(self, line1, column1, line2, column2)
 end
 
 
@@ -420,7 +429,7 @@ end
 
 local function draw_gutter_rail(dv, index, messages)
   local rail = messages.rails[index]
-  if #rail < 2 then return end
+  if rail == nil or #rail < 2 then return end
 
   local first_message = rail[1]
   local last_message = rail[#rail]
@@ -593,12 +602,6 @@ function StatusView:get_items()
         end
       end
     end
-  end
-
-  if lint.running > 0 then
-    local r = { "linting…", style.dim, self.separator2, style.text }
-    table_add(r, right)
-    right = r
   end
 
   return left, right

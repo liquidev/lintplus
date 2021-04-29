@@ -1,3 +1,5 @@
+-- lite-xl 1.16
+
 -- linter compatibility module for lint+
 -- this module simply defines a linter.add_language function for compatibility
 -- with the existing linter module.

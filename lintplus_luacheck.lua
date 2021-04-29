@@ -1,3 +1,5 @@
+-- lite-xl 1.16
+
 -- luacheck plugin for lint+
 
 --- CONFIG ---

@@ -1,3 +1,5 @@
+-- lite-xl 1.16
+
 -- Rust plugin for lint+
 
 
@@ -83,16 +85,22 @@ local function process_message(
       end
     end
 
-    table.insert(out_messages, { filename, line, column, kind, msg, rail })
-  end
-
-  for _, sp in ipairs(message.spans) do
-    if sp.label ~= nil and not sp.is_primary then
-      local filename = context.workspace_root .. '/' .. span.file_name
-      local line, column = sp.line_start, sp.column_start
-      table.insert(out_messages,
-                   { filename, line, column, "info", sp.label, rail })
+    for _, sp in ipairs(message.spans) do
+      if sp.label ~= nil and not sp.is_primary then
+        local s_filename = context.workspace_root .. '/' .. span.file_name
+        local s_line, s_column = sp.line_start, sp.column_start
+        table.insert(out_messages,
+                     { s_filename, s_line, s_column, "info", sp.label, rail })
+      end
     end
+
+    if span.suggested_replacement ~= nil then
+      local suggestion = span.suggested_replacement:match("(.-)\r?\n")
+      if suggestion ~= nil then
+        msg = msg .. " `" .. suggestion .. '`'
+      end
+    end
+    table.insert(out_messages, { filename, line, column, kind, msg, rail })
   end
 
   for _, child in ipairs(message.children) do
@@ -132,7 +140,7 @@ lintplus.add("rust") {
 
     command = lintplus.command {
       set_cwd = true,
-      "cargo", "check",
+      "cargo", "clippy",
       "--message-format", "json",
       "--color", "never",
       -- "--tests",
