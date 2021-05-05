@@ -298,7 +298,6 @@ function Doc:insert(line, column, text)
     shift = shift + 1
   end
   if shift == 0 then return end
-  print("shifting messages "..shift.." lines downwards")
 
   local lines = file_messages.lines
   for i = #self.lines, line, -1 do
@@ -312,10 +311,8 @@ function Doc:insert(line, column, text)
 
   -- shift rails downwards
   local rails = file_messages.rails
-  print(common.serialize(rails))
   for _, rail in pairs(rails) do
     for _, message in ipairs(rail) do
-      print(message.line, line)
       if message.line >= line then
         message.line = message.line + shift
       end
