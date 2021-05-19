@@ -11,11 +11,6 @@
 
 local lintplus = require "plugins.lintplus"
 
-local redirection = ""
-if PLATFORM == "Linux" then
-  redirection = "2> /dev/null"
-end
-
 lintplus.add("php") {
   filename = "%.php$",
   procedure = {
@@ -24,8 +19,7 @@ lintplus.add("php") {
         "php",
         "-l",
         lintplus.args,
-        lintplus.filename,
-        redirection
+        lintplus.filename
       },
       "php_args"
     ),
