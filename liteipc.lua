@@ -27,7 +27,7 @@ function liteipc_loader.sync()
       for i = 1, #arg do
         local c = arg:sub(i, i)
         if c == '\\' then
-          backslash_buffer.add(c)
+          table.insert(backslash_buffer, c)
         elseif c == '"' then
           local buffer_concat = table.concat(backslash_buffer)
           result = result ..
