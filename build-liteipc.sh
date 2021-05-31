@@ -1,9 +1,9 @@
 #!/usr/bin/env sh
 
 echo "-- Compiling liteipc_native… This might take a while."
-pushd liteipc
+cd liteipc
 cargo build --release
-popd
+cd ..
 
 echo "-- Symlinking to the current directory"
 ln -s $PWD/liteipc/target/release/libliteipc.so $PWD/liteipc_native.so
