@@ -49,6 +49,60 @@ lint.index = {}
 lint.messages = {}
 
 
+local LintContext = {}
+
+
+function LintContext:__index(key)
+  if self._user_context and self._user_context[key] ~= nil then
+    return self._user_context[key]
+  end
+  return rawget(LintContext, key)
+end
+
+
+function LintContext:create_gutter_rail()
+  if not self._doc then return 0 end
+  local lp = self._doc.__lintplus
+  lp.rail_count = lp.rail_count + 1
+  return lp.rail_count
+end
+
+
+function LintContext:gutter_rail_count()
+  if not self._doc then return 0 end
+  return self._doc.__lintplus.rail_count
+end
+
+
+-- Can be used by other plugins to properly set the context when loading a doc
+function lint.init_doc(filename, doc)
+  filename = system.absolute_path(filename)
+  local context = setmetatable({
+    _doc = doc or nil,
+    _user_context = nil,
+  }, LintContext)
+
+  if doc then
+    doc.__lintplus_context = {}
+    context._user_context = doc.__lintplus_context
+
+    doc.__lintplus = {
+      rail_count = 0,
+    }
+  end
+
+  if not lint.messages[filename] then
+    lint.messages[filename] = {
+      context = context,
+      lines = {},
+      rails = {},
+    }
+  elseif doc then
+    lint.messages[filename].context = context
+  end
+end
+
+
 function lint.get_linter_for_doc(doc)
   if not doc.filename then
     return nil
@@ -64,20 +118,25 @@ end
 
 
 -- unused for now, because it was a bit buggy
-local function clear_messages(linter)
-  local clear = {}
-  for filename, _ in pairs(lint.messages) do
-    if common.match_pattern(filename, linter.filename) then
-      table.insert(clear, filename)
-    end
-  end
-  for _, filename in ipairs(clear) do
-    lint.messages[filename] = nil
+-- Note: Should be fixed now
+function lint.clear_messages(filename)
+  filename = system.absolute_path(filename)
+
+  if lint.messages[filename] then
+    lint.messages[filename].lines = {}
+    lint.messages[filename].rails = {}
   end
 end
 
 
-local function add_message(filename, line, column, kind, message, rail)
+function lint.add_message(filename, line, column, kind, message, rail)
+  local filename_abs = system.absolute_path(filename)
+  if not lint.messages[filename_abs] then
+    -- This allows us to at least store messages until context is properly
+    -- set from the calling plugin.
+    lint.init_doc(filename)
+  end
+  filename = filename_abs
   local file_messages = lint.messages[filename]
   local lines, rails = file_messages.lines, file_messages.rails
   lines[line] = lines[line] or {}
@@ -118,35 +177,12 @@ local function process_line(doc, linter, line, context)
       assert(type(message) == "string")
       assert(rail == nil or type(rail) == "number")
 
-      add_message(outfile, lineno, columnno, kind, message, rail)
+      lint.add_message(outfile, lineno, columnno, kind, message, rail)
       core.redraw = true
     end
   end
 
   return had_messages
-end
-
-
-local LintContext = {}
-
-
-function LintContext:__index(key)
-  if self._user_context[key] ~= nil then
-    return self._user_context[key]
-  end
-  return rawget(LintContext, key)
-end
-
-
-function LintContext:create_gutter_rail()
-  local lp = self._doc.__lintplus
-  lp.rail_count = lp.rail_count + 1
-  return lp.rail_count
-end
-
-
-function LintContext:gutter_rail_count()
-  return self._doc.__lintplus.rail_count
 end
 
 
@@ -161,6 +197,7 @@ end
 local function compare_rail_messages(a, b)
   return a.line < b.line
 end
+
 
 function lint.check(doc)
   if doc.filename == nil then return end
@@ -567,11 +604,17 @@ end
 local StatusView_get_items = StatusView.get_items
 function StatusView:get_items()
   local left, right = StatusView_get_items(self)
+  local doc = core.active_view.doc
 
-  if getmetatable(core.active_view) == DocView and
-     lint.get_linter_for_doc(core.active_view.doc)
+  if
+    getmetatable(core.active_view) == DocView
+    and
+    (
+      lint.get_linter_for_doc(doc)
+      or
+      lint.messages[system.absolute_path(doc.filename)]
+    )
   then
-    local doc = core.active_view.doc
     local line1, _, line2, _ = doc:get_selection()
     local file_messages = lint.messages[system.absolute_path(doc.filename)]
     if file_messages ~= nil then
