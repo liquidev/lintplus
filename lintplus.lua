@@ -298,9 +298,9 @@ function Doc:load(filename)
   end
 end
 
-function Doc:save(filename)
+function Doc:save(filename, abs_filename)
   local old_filename = self.filename
-  Doc_save(self, filename)
+  Doc_save(self, filename, abs_filename)
   if old_filename ~= filename then
     init_linter_for_doc(self)
   end
@@ -607,6 +607,8 @@ function StatusView:get_items()
   local doc = core.active_view.doc
 
   if
+    doc and doc.filename  -- skip new files
+    and
     getmetatable(core.active_view) == DocView
     and
     (
@@ -675,6 +677,7 @@ function lint.setup.lint_on_doc_load()
   local doc_load = Doc.load
   function Doc:load(...)
     doc_load(self, ...)
+    if not self.filename then return end
     if lint.get_linter_for_doc(self) ~= nil then
       lint.check(self)
     end
