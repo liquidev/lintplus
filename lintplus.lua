@@ -131,9 +131,9 @@ local LintContext = {}
 
 
 function LintContext:__index(key)
-  if self._user_context[key] ~= nil then
-    return self._user_context[key]
-  end
+  -- if rawget(self._user_context, key) ~= nil then
+  --   return rawget(self._user_context, key)
+  -- end
   return rawget(LintContext, key)
 end
 
