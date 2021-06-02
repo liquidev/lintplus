@@ -50,14 +50,7 @@ lint.messages = {}
 
 
 local LintContext = {}
-
-
-function LintContext:__index(key)
-  if self._user_context and self._user_context[key] ~= nil then
-    return self._user_context[key]
-  end
-  return rawget(LintContext, key)
-end
+LintContext.__index = LintContext
 
 
 function LintContext:create_gutter_rail()
