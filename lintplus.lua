@@ -123,13 +123,11 @@ end
 
 
 function lint.add_message(filename, line, column, kind, message, rail)
-  local filename_abs = system.absolute_path(filename)
-  if not lint.messages[filename_abs] then
+  if not lint.messages[filename] then
     -- This allows us to at least store messages until context is properly
     -- set from the calling plugin.
     lint.init_doc(filename)
   end
-  filename = filename_abs
   local file_messages = lint.messages[filename]
   local lines, rails = file_messages.lines, file_messages.rails
   lines[line] = lines[line] or {}
@@ -161,16 +159,21 @@ local function process_line(doc, linter, line, context)
   local iterator = linter.procedure.interpreter(file, line, context)
   if iterator == "bail" then return iterator end
 
-  for outfile, lineno, columnno, kind, message, rail in iterator do
-    if outfile == file then -- TODO: support project-wide errors
-      assert(type(outfile) == "string")
+  if os.getenv("LINTPLUS_DEBUG_LINES") then
+    print("lint+ | "..line)
+  end
+
+  for rawfile, lineno, columnno, kind, message, rail in iterator do
+    assert(type(rawfile) == "string")
+    local absfile = system.absolute_path(rawfile)
+    if absfile == file then -- TODO: support project-wide errors
       assert(type(lineno) == "number")
       assert(type(columnno) == "number")
       assert(type(kind) == "string")
       assert(type(message) == "string")
       assert(rail == nil or type(rail) == "number")
 
-      lint.add_message(outfile, lineno, columnno, kind, message, rail)
+      lint.add_message(absfile, lineno, columnno, kind, message, rail)
       core.redraw = true
     end
   end
@@ -668,8 +671,8 @@ lint.setup = {}
 function lint.setup.lint_on_doc_load()
 
   local doc_load = Doc.load
-  function Doc:load(...)
-    doc_load(self, ...)
+  function Doc:load(filename)
+    doc_load(self, filename)
     if not self.filename then return end
     if lint.get_linter_for_doc(self) ~= nil then
       lint.check(self)
@@ -681,8 +684,8 @@ end
 function lint.setup.lint_on_doc_save()
 
   local doc_save = Doc.save
-  function Doc:save(...)
-    doc_save(self, ...)
+  function Doc:save(filename, abs_filename)
+    doc_save(self, filename, abs_filename)
     if lint.get_linter_for_doc(self) ~= nil then
       lint.check(self)
     end

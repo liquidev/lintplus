@@ -4,7 +4,7 @@
 
 --- CONFIG ---
 
--- config.lint.luacheck_args: string
+-- config.lint.luacheck_args: table[string]
 --   passes the specified arguments to luacheck
 
 --- IMPLEMENTATION ---
