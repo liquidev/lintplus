@@ -185,7 +185,8 @@ between severity levels, so lint+ is fully stylable.
 Example:
 
 ```lua
-local style = require "common.style"
+local common = require "core.common"
+local style = require "core.style"
 style.lint = {
   info = style.syntax["keyword2"],
   hint = style.syntax["function"],
