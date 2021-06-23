@@ -51,17 +51,8 @@ Navigate to your `plugins` folder, and clone the repository:
 $ git clone https://github.com/liquidev/lintplus
 ```
 
-Then, copy `lintplus.lua` to the parent directory, or better yet, create a
-symbolic link:
-
-```sh
-# I'm not sure whether `ln` is available under Git for Windows.
-# Your mileage may vary.
-$ ln -s $PWD/{lintplus/lintplus,lintplus}.lua
-```
-
-To enable plugins for different languages, do the same thing, but with
-`lintplus_*.lua`. For example, to enable support for Nim and Rust:
+To enable the different linters, symlink (or copy) all the `lintplus_*.lua`
+files you need to your plugins directory:
 
 ```sh
 $ ln -s $PWD/{lintplus/lintplus_nim,lintplus_nim}.lua
@@ -300,11 +291,11 @@ Note that when not using async mode, lint+ tries its best to escape the command
 before passing it onto `io.popen`, but this may fail, so that's yet another
 reason to switch to async mode.
 
-lint+'s solution to this is a wrapper function over `lintplus.command`,
-called `lintplus.args_command`:
+If you want to let the user of your linter specify some extra arguments,
+`lintplus.args_command` can be used instead of `lintplus.command`:
 
 ```lua
-...
+-- ...
     command = lintplus.args_command(
       { "luacheck",
         lintplus.args,
@@ -312,9 +303,11 @@ called `lintplus.args_command`:
         lintplus.filename },
       "luacheck_args"
     )
-...
+-- ...
 ```
 
+To enable plugins for different languages, do the same thing, but with
+`lintplus_*.lua`. For example, to enable support for Nim and Rust:
 The second argument to this function is the name of the field in the
 `config.lint` table. Then, the user provides arguments like so:
 
