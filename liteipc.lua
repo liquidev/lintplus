@@ -73,8 +73,13 @@ function liteipc_loader.sync()
     -- this solution with pushd and popd feels fragile af but i don't know of
     -- any better way to make popen behave like i need it to
     if cwd ~= nil then os.execute("pushd "..quote_shell(cwd)) end
+    -- we need to redirect stderr to stdout
+    local escaped_command = escape_args(args).." 2>&1"
+    if os.getenv("LINTPLUS_LITEIPC_DEBUG_SYNC_MODE_ARGS") then
+      print(escaped_command)
+    end
     local proc = setmetatable({
-      popen = io.popen(escape_args(args), 'r'),
+      popen = io.popen(escaped_command, 'r'),
     }, Process)
     if cwd ~= nil then os.execute("popd") end
     return proc
