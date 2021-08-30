@@ -1,4 +1,4 @@
--- lite-xl 1.16
+-- mod-version:2
 
 -- lint+ - an improved linter for lite
 -- copyright (C) lqdev, 2020
@@ -96,6 +96,8 @@ function lint.init_doc(filename, doc)
 end
 
 
+-- Returns an appropriate linter for the given doc, or nil if no linter is
+-- found.
 function lint.get_linter_for_doc(doc)
   if not doc.filename then
     return nil
@@ -187,7 +189,10 @@ local function compare_message_priorities(a, b)
 end
 
 local function compare_messages(a, b)
-  return a.column > b.column or compare_message_priorities(a, b)
+  if a.column == b.column then
+    return compare_message_priorities(a, b)
+  end
+  return a.column > b.column
 end
 
 local function compare_rail_messages(a, b)
@@ -432,7 +437,8 @@ function DocView:get_gutter_width()
       extra_width = rail_count * (rail_width(self) + rail_spacing(self))
     end
   end
-  return DocView_get_gutter_width(self) + extra_width
+  local original_width, padding = DocView_get_gutter_width(self)
+  return original_width + extra_width, padding
 end
 
 
