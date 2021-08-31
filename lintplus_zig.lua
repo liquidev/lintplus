@@ -1,4 +1,4 @@
--- mod-version:1 -- lite-xl 1.16
+-- mod-version:2
 
 -- Zig plugin for lint+
 
