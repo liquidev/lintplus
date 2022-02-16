@@ -36,8 +36,7 @@ local Doc = require "core.doc"
 local DocView = require "core.docview"
 local StatusView = require "core.statusview"
 
-local liteipc_loader = require "plugins.lintplus.liteipc"
-local liteipc = liteipc_loader.sync()
+local liteipc = require "plugins.lintplus.liteipc"
 
 
 local lint = {}
@@ -125,6 +124,7 @@ end
 
 
 function lint.add_message(filename, line, column, kind, message, rail)
+  filename = system.absolute_path(filename)
   if not lint.messages[filename] then
     -- This allows us to at least store messages until context is properly
     -- set from the calling plugin.
@@ -240,7 +240,7 @@ function lint.check(doc)
   core.add_thread(function ()
     -- poll the process for lines of output
     while true do
-      local exit, code = process:poll(function (line)
+      local exit, code, errmsg = process:poll(function (line)
         process_line(doc, linter, line, context)
       end)
       if exit ~= nil then
@@ -248,11 +248,10 @@ function lint.check(doc)
         -- the exit code is ignored because the linter is allowed to return an
         -- error
         if exit == "signal" then
-          report_error("linter exited with signal " .. code)
-        elseif exit == "other" then
-          report_error("linter exited with error code " .. code)
-        elseif exit == "undetermined" then
-          report_error("linter exited with an undetermined error")
+          report_error(
+            "linter exited with signal " .. code
+            .. (errmsg and " : " .. errmsg or "")
+          )
         end
         break
       end
@@ -700,16 +699,7 @@ function lint.setup.lint_on_doc_save()
 end
 
 function lint.enable_async()
-  local ok, err = core.try(function ()
-    liteipc = liteipc_loader.async()
-    lint.ipc = liteipc
-    core.log_quiet("lint+: using experimental async mode")
-  end)
-  if not ok then
-    core.log_quiet("additional error details: \n%s", err)
-    core.error(
-      "lint+: could not enable async mode. double-check your installation")
-  end
+  core.error("lint+: calling enable_async() is not needed anymore")
 end
 
 
