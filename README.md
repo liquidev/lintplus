@@ -1,6 +1,6 @@
 # lint+
 
-An improved linting plugin for [lite](https://github.com/rxi/lite).
+An improved linting plugin for [Lite XL](https://github.com/lite-xl/lite-xl).
 
 Includes compatibility layer for [`linter`](https://github.com/drmargarido/linters).
 
