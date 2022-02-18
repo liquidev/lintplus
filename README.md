@@ -31,8 +31,6 @@ There were a few problems I had with the existing `linter` plugin:
   over the warning first.
 - It spam-runs the linter command, but Nim (and possibly other languages)
   compiles relatively slowly, which lags the editor to hell.
-- It is not async, so when the lint command takes its sweet time your editor
-  freezes completely.
 - It doesn't display the first or current error message on the status view.
 
 lint+ aims to fix all of the above problems.
@@ -82,70 +80,6 @@ lintplus.setup.lint_on_doc_save()
 ```
 This overrides `Doc.load` and `Doc.save` with some extra behavior to enable
 automatic linting.
-
-### Asynchrony
-
-By default, lint+ runs in synchronous mode, which can cause a few problems along
-the way:
-
-- If the linter takes a while to run, your entire editor will freeze until the
-  linter is done running.
-- On Windows, a cmd.exe window will get opened, which can get annoying.
-
-Both of these are limitations of `io.popen`, and there's no easy way to fix this
-from within lint+ itself. However, lint+ can operate in *asynchronous* mode,
-which requires using a native library to do all the hard work of spawning and
-reading output from a process. This is done by a helper library called
-`liteipc`, which can be found in the source tree under a separate directory.
-
-This library is written in Rust, so you will need to install it in order to
-compile it. Compiling `liteipc` should be as simple as executing one of these
-scripts, depending on your OS:
-
-- Windows: `liteipc/build-liteipc.bat` (TODO)
-- Linux: `liteipc/build-liteipc.sh`
-- macOS is not currently supported. Please open a pull request updating the
-  README if you're able to port the .sh script to support macOS dylib.
-
-After building `liteipc`, there's still one thing left to do. That thing is
-recompiling lite to use dynamically linked Lua. The official distribution of
-lite links Lua statically, which prevents C libraries from loading properly.
-I'd recommend switching to [Lite XL](https://github.com/franko/lite-xl), which
-allows for linking to Lua dynamically during compilation.
-
-I'm not sure whether this process is required on Windows and macOS at all, but
-here's how to do it on Arch Linux:
-```sh
-# We'll need to grab Lua 5.2 first, so that Meson links to it dynamically.
-# On other distros this may require you to download a separate development
-# header package
-$ doas pacman -S lua52
-
-# Then, we can build the actual executable
-$ git clone https://github.com/franko/lite-xl
-$ cd lite-xl
-$ ./build-packages.sh 1.15.3 x86_64
-# If you don't necessarily want to port over your configuration from official
-# lite, it's possible to specify the -portable option, like so:
-$ ./build-packages.sh -portable 1.15.3 x86_64
-```
-
-After compiling, a tar.gz archive will be created containing the custom build
-of Lite XL. Now we're on the final stretch: simply unpack the build somewhere,
-possibly port your configuration according to information in
-[Lite XL's release notes](https://github.com/franko/lite-xl/releases/tag/v1.13-lite-xl)
-if you weren't using it prior to installing lint+.
-
-Finally, with all of that, enabling async mode should be as simple as flipping
-a switch:
-
-```lua
-local lintplus = require "plugins.lintplus"
-lintplus.enable_async()
-```
-
-This will throw an error if async mode can't be enabled (for instance, if you
-try to use async mode without dynamically linked Lua).
 
 ## Configuration
 
@@ -288,10 +222,6 @@ lintplus.add("nim") {
 }
 ```
 
-Note that when not using async mode, lint+ tries its best to escape the command
-before passing it onto `io.popen`, but this may fail, so that's yet another
-reason to switch to async mode.
-
 If you want to let the user of your linter specify some extra arguments,
 `lintplus.args_command` can be used instead of `lintplus.command`:
 
@@ -316,11 +246,8 @@ The second argument to this function is the name of the field in the
 config.lint.luacheck_args = { "--max-line-length=80", "--std=love" }
 ```
 
-Again, under synchronous mode, these are escaped to lint+'s best effort.
-
 ## Known problems
 
-- Getting async to work is difficult.
 - Due to the fact that it shows the most severe message at the end of the
   line, displaying more than one message per line is really difficult with
   the limited horizontal real estate, so it can only display one message per
