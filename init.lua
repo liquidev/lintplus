@@ -26,11 +26,12 @@ local default_kind_pretty_names = {
 --- IMPLEMENTATION ---
 
 
+local core = require "core"
 local command = require "core.command"
 local common = require "core.common"
 local config = require "core.config"
-local core = require "core"
 local style = require "core.style"
+local keymap = require "core.keymap"
 
 local Doc = require "core.doc"
 local DocView = require "core.docview"
@@ -68,7 +69,7 @@ end
 
 -- Can be used by other plugins to properly set the context when loading a doc
 function lint.init_doc(filename, doc)
-  filename = system.absolute_path(filename)
+  filename = core.project_absolute_path(filename)
   local context = setmetatable({
     _doc = doc or nil,
     _user_context = nil,
@@ -102,7 +103,7 @@ function lint.get_linter_for_doc(doc)
     return nil
   end
 
-  local file = system.absolute_path(doc.filename)
+  local file = core.project_absolute_path(doc.filename)
   for name, linter in pairs(lint.index) do
     if common.match_pattern(file, linter.filename) then
       return linter, name
@@ -114,7 +115,7 @@ end
 -- unused for now, because it was a bit buggy
 -- Note: Should be fixed now
 function lint.clear_messages(filename)
-  filename = system.absolute_path(filename)
+  filename = core.project_absolute_path(filename)
 
   if lint.messages[filename] then
     lint.messages[filename].lines = {}
@@ -124,7 +125,7 @@ end
 
 
 function lint.add_message(filename, line, column, kind, message, rail)
-  filename = system.absolute_path(filename)
+  filename = core.project_absolute_path(filename)
   if not lint.messages[filename] then
     -- This allows us to at least store messages until context is properly
     -- set from the calling plugin.
@@ -154,7 +155,7 @@ end
 
 
 local function process_line(doc, linter, line, context)
-  local file = system.absolute_path(doc.filename)
+  local file = core.project_absolute_path(doc.filename)
 
   local had_messages = false
 
@@ -167,7 +168,7 @@ local function process_line(doc, linter, line, context)
 
   for rawfile, lineno, columnno, kind, message, rail in iterator do
     assert(type(rawfile) == "string")
-    local absfile = system.absolute_path(rawfile)
+    local absfile = core.project_absolute_path(rawfile)
     if absfile == file then -- TODO: support project-wide errors
       assert(type(lineno) == "number")
       assert(type(columnno) == "number")
@@ -209,7 +210,7 @@ function lint.check(doc)
     return
   end
 
-  local filename = system.absolute_path(doc.filename)
+  local filename = core.project_absolute_path(doc.filename)
   local context = setmetatable({
     _doc = doc,
     _user_context = doc.__lintplus_context,
@@ -276,7 +277,7 @@ end
 
 -- inject initialization routines to documents
 
-local Doc_load, Doc_save = Doc.load, Doc.save
+local Doc_load, Doc_save, Doc_on_close = Doc.load, Doc.save, Doc.on_close
 
 local function init_linter_for_doc(doc)
   local linter, _ = lint.get_linter_for_doc(doc)
@@ -284,7 +285,7 @@ local function init_linter_for_doc(doc)
   doc.__lintplus_context = {}
   if linter.procedure.init ~= nil then
     linter.procedure.init(
-      system.absolute_path(doc.filename),
+      core.project_absolute_path(doc.filename),
       doc.__lintplus_context
     )
   end
@@ -306,6 +307,16 @@ function Doc:save(filename, abs_filename)
   end
 end
 
+function Doc:on_close()
+  Doc_on_close(self)
+  if not self.filename then return end
+  local filename = core.project_absolute_path(self.filename)
+  -- release Doc object for proper garbage collection
+  if lint.messages[filename] then
+    lint.messages[filename] = nil
+  end
+end
+
 
 -- inject hooks to Doc.insert and Doc.remove to shift messages around
 
@@ -324,7 +335,7 @@ function Doc:insert(line, column, text)
   if self.filename == nil then return end
   if line == math.huge then return end
 
-  local filename = system.absolute_path(self.filename)
+  local filename = core.project_absolute_path(self.filename)
   local file_messages = lint.messages[filename]
   local lp = self.__lintplus
   if file_messages == nil or lp == nil then return end
@@ -366,7 +377,7 @@ local function update_messages_after_removal(
   if line2 == math.huge then return end
   if doc.filename == nil then return end
 
-  local filename = system.absolute_path(doc.filename)
+  local filename = core.project_absolute_path(doc.filename)
   local file_messages = lint.messages[filename]
   local lp = doc.__lintplus
   if file_messages == nil or lp == nil then return end
@@ -430,7 +441,7 @@ local DocView_get_gutter_width = DocView.get_gutter_width
 function DocView:get_gutter_width()
   local extra_width = 0
   if self.doc.filename ~= nil then
-    local file_messages = lint.messages[system.absolute_path(self.doc.filename)]
+    local file_messages = lint.messages[core.project_absolute_path(self.doc.filename)]
     if file_messages ~= nil then
       local rail_count = file_messages.context:gutter_rail_count()
       extra_width = rail_count * (rail_width(self) + rail_spacing(self))
@@ -506,7 +517,7 @@ function DocView:draw()
 
   local filename = self.doc.filename
   if filename == nil then return end
-  filename = system.absolute_path(filename)
+  filename = core.project_absolute_path(filename)
   local messages = lint.messages[filename]
   if messages == nil or not messages.rails_sorted then return end
   local rails = messages.rails
@@ -560,7 +571,7 @@ function DocView:draw_line_text(idx, x, y)
   if lp == nil then return end
 
   local yy = get_underline_y(self, idx)
-  local file_messages = lint.messages[system.absolute_path(self.doc.filename)]
+  local file_messages = lint.messages[core.project_absolute_path(self.doc.filename)]
   if file_messages == nil then return end
   local messages = file_messages.lines[idx]
   if messages == nil then return end
@@ -602,52 +613,158 @@ local function kind_pretty_name(kind)
 end
 
 
-local StatusView_get_items = StatusView.get_items
-function StatusView:get_items()
-  local left, right = StatusView_get_items(self)
-  local doc = core.active_view.doc
+local function get_error_messages(doc)
+  if not doc then return nil end
+  return lint.messages[core.project_absolute_path(doc.filename)]
+end
 
-  if
-    doc and doc.filename  -- skip new files
-    and
-    getmetatable(core.active_view) == DocView
-    and
-    (
-      lint.get_linter_for_doc(doc)
-      or
-      lint.messages[system.absolute_path(doc.filename)]
-    )
-  then
-    local line1, _, line2, _ = doc:get_selection()
-    local file_messages = lint.messages[system.absolute_path(doc.filename)]
-    if file_messages ~= nil then
-      if file_messages.lines[line1] ~= nil and line1 == line2 then
-        local msg = file_messages.lines[line1][1]
-        table_add(left, {
-          style.dim, self.separator2,
-          kind_pretty_name(msg.kind), ": ",
-          style.text, msg.message,
-        })
-      else
-        local line, message = math.huge, nil
-        for ln, messages in pairs(file_messages.lines) do
-          local msg = messages[1]
-          if msg.kind == "error" and ln < line  then
-            line, message = ln, msg
-          end
-        end
-        if message ~= nil then
-          table_add(left, {
-            style.dim, self.separator2,
-            "line ", tostring(line), " ", kind_pretty_name(message.kind), ": ",
-            style.text, message.message,
-          })
-        end
+
+local function get_current_error(doc)
+  local file_messages = get_error_messages(doc)
+  local line, message = math.huge, nil
+  for ln, messages in pairs(file_messages.lines) do
+    local msg = messages[1]
+    if msg.kind == "error" and ln < line  then
+      line, message = ln, msg
+    end
+  end
+  if message ~= nil then
+    return line, message.kind, message.message
+  end
+  return nil, nil, nil
+end
+
+
+local function goto_prev_message()
+  local doc = core.active_view.doc
+  local current_line = doc:get_selection()
+  local file_messages = get_error_messages(doc)
+  if file_messages ~= nil then
+    local prev = nil
+    local found = false
+    local last = nil
+    for line, _ in pairs(file_messages.lines) do
+      if current_line <= line  then
+        found = true
+      end
+      if not found then
+        prev = line
+      end
+      last = line
+    end
+    local line = prev or last
+    if line then
+      doc:set_selection(line, 1, line, 1)
+    end
+  end
+end
+
+
+local function goto_next_message()
+  local doc = core.active_view.doc
+  local current_line = doc:get_selection()
+  local file_messages = get_error_messages(doc)
+  if file_messages ~= nil then
+    local first = nil
+    local next = nil
+    for line, _ in pairs(file_messages.lines) do
+      if not first then
+        first = line
+      end
+      if line > current_line then
+        next = line
+        break
+      end
+    end
+    local line = next or first
+    if line then
+      doc:set_selection(line, 1, line, 1)
+    end
+  end
+end
+
+
+local function get_status_view_items()
+  local doc = core.active_view.doc
+  local line1, _, line2, _ = doc:get_selection()
+  local file_messages = get_error_messages(doc)
+  if file_messages ~= nil then
+    if file_messages.lines[line1] ~= nil and line1 == line2 then
+      local msg = file_messages.lines[line1][1]
+      return {
+        kind_pretty_name(msg.kind), ": ",
+        style.text, msg.message,
+      }
+    else
+      local line, kind, message = get_current_error(doc)
+      if line ~= nil then
+        return {
+          "line ", tostring(line), " ", kind_pretty_name(kind), ": ",
+          style.text, message,
+        }
       end
     end
   end
+  return {}
+end
 
-  return left, right
+if StatusView["add_item"] then
+  core.status_view:add_item(
+    function()
+      local doc = core.active_view.doc
+      if
+        doc and doc.filename  -- skip new files
+        and
+        getmetatable(core.active_view) == DocView
+        and
+        (
+          lint.get_linter_for_doc(doc)
+          or
+          lint.messages[core.project_absolute_path(doc.filename)]
+        )
+      then
+        return true
+      end
+      return false
+    end,
+    "lint+:message",
+    StatusView.Item.LEFT,
+    get_status_view_items,
+    function()
+      local doc = core.active_view.doc
+      local line = get_current_error(doc)
+      if line ~= nil then
+        doc:set_selection(line, 1, line, 1)
+      end
+    end,
+    -1,
+    "Lint+ error message"
+  ).separator = core.status_view.separator2
+else
+  local StatusView_get_items = StatusView.get_items
+  function StatusView:get_items()
+    local left, right = StatusView_get_items(self)
+    local doc = core.active_view.doc
+
+    if
+      doc and doc.filename  -- skip new files
+      and
+      getmetatable(core.active_view) == DocView
+      and
+      (
+        lint.get_linter_for_doc(doc)
+        or
+        lint.messages[core.project_absolute_path(doc.filename)]
+      )
+    then
+      local items = get_status_view_items()
+      if #items > 0 then
+        table.insert(left, {style.dim, self.separator2, table.unpack(items)})
+      end
+    end
+
+    return left, right
+  end
 end
 
 
@@ -656,6 +773,23 @@ command.add(DocView, {
     lint.check(core.active_view.doc)
   end
 })
+
+command.add(DocView, {
+  ["lint+:goto-previous-message"] = function ()
+    goto_prev_message()
+  end
+})
+
+command.add(DocView, {
+  ["lint+:goto-next-message"] = function ()
+    goto_next_message()
+  end
+})
+
+keymap.add {
+  ["alt+up"]    = "lint+:goto-previous-message",
+  ["alt+down"]  = "lint+:goto-next-message"
+}
 
 
 --- LINTER PLUGINS ---
