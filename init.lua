@@ -227,7 +227,7 @@ function lint.check(doc)
   }
 
   local function report_error(msg)
-    core.error(
+    core.log_quiet(
       "lint+/" .. linter_name .. ": " ..
       doc.filename .. ": " .. msg
     )
@@ -245,9 +245,7 @@ function lint.check(doc)
         process_line(doc, linter, line, context)
       end)
       if exit ~= nil then
-        -- the only OK exit condition is ("exit", _)
-        -- the exit code is ignored because the linter is allowed to return an
-        -- error
+        -- If linter exited with exit code non 0 or 1 log it
         if exit == "signal" then
           report_error(
             "linter exited with signal " .. code

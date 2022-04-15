@@ -7,7 +7,8 @@ Process.__index = Process
 
 function liteipc.start_process(args, cwd)
   local proc = setmetatable({
-    popen = process.start(args, {cwd = cwd})
+    popen = process.start(args, {cwd = cwd}),
+    read_from = ""
   }, Process)
   return proc
 end
@@ -15,8 +16,32 @@ end
 function Process.poll(self, callback)
   local line = ""
   local read = nil
+
+  while self.read_from == "" and self.popen:returncode() == nil do
+    local stderr = self.popen:read_stderr(1)
+    local stdout = self.popen:read_stdout(1)
+    local out = nil
+    if stderr ~= nil and stderr ~= "" then
+      out = stderr
+      self.read_from = "stderr"
+    elseif stdout ~= nil and stdout ~= "" then
+      out = stdout
+      self.read_from = "stdout"
+    end
+    if out ~= nil then
+      if out ~= "\n" then
+        line = line .. out
+      end
+      break
+    end
+  end
+
   while true do
-    read = self.popen:read_stderr(1)
+    if self.read_from == "stderr" then
+      read = self.popen:read_stderr(1)
+    else
+      read = self.popen:read_stdout(1)
+    end
     if read == nil or read == "\n" then
       if line ~= "" then callback(line) end
       break
@@ -24,6 +49,7 @@ function Process.poll(self, callback)
       line = line .. read
     end
   end
+
   if not self.popen:running() and read == nil then
     local exit = "exit"
     local retcode = self.popen:returncode()
@@ -33,6 +59,7 @@ function Process.poll(self, callback)
     local errmsg = process.strerror(retcode)
     return exit, retcode, errmsg
   end
+
   return nil, nil, nil
 end
 
