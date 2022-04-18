@@ -1,5 +1,3 @@
--- mod-version:2
-
 -- luacheck plugin for lint+
 
 --- CONFIG ---

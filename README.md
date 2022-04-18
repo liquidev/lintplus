@@ -49,12 +49,18 @@ Navigate to your `plugins` folder, and clone the repository:
 $ git clone https://github.com/liquidev/lintplus
 ```
 
-To enable the different linters, symlink (or copy) all the `lintplus_*.lua`
-files you need to your plugins directory:
+To enable the different linters available on the [linters](linters/)
+subdirectory, you have to load them on your lite-xl user module file (`init.lua`).
 
-```sh
-$ ln -s $PWD/{lintplus/lintplus_nim,lintplus_nim}.lua
-$ ln -s $PWD/{lintplus/lintplus_rust,lintplus_rust}.lua
+You can load a single linter:
+```lua
+local lintplus = require "plugins.lintplus"
+lintplus.load("luacheck")
+```
+or multiple linters by passing a table:
+```lua
+local lintplus = require "plugins.lintplus"
+lintplus.load({"php", "luacheck"})
 ```
 
 If you want to use plugins designed for the other `linter`, you will also need
@@ -68,11 +74,10 @@ Keep in mind that plugins designed for `linter` will not work as well as lint+
 plugins, because of `linter`'s lack of multiple severity levels. All warnings
 reported by `linter` linters will be reported with the `warning` level.
 
-lint+ will add a command `lint+:lint`, which upon execution, will run the
-appropriate linter command for the current view and update messages accordingly.
+### Automatic Linting
 
-You may also want to add this to your `user/init.lua` to enable automatic
-linting upon opening/saving a file:
+To enable automatic linting upon opening/saving a file, add the following
+code tou your lite-xl user module:
 ```lua
 local lintplus = require "plugins.lintplus"
 lintplus.setup.lint_on_doc_load()
@@ -80,6 +85,14 @@ lintplus.setup.lint_on_doc_save()
 ```
 This overrides `Doc.load` and `Doc.save` with some extra behavior to enable
 automatic linting.
+
+## Commands
+
+Available commands from the lite-xl commands palette (ctrl+shift+p):
+
+* `lint+:lint` - run the appropriate linter command for the current document
+* `lint+:goto-previous-message` (alt+up) - jump to previous message on current document
+* `lint+:goto-next-message` (alt+down) - jump to next message on current document
 
 ## Configuration
 

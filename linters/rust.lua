@@ -1,5 +1,3 @@
--- mod-version:2
-
 -- Rust plugin for lint+
 
 

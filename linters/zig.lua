@@ -1,5 +1,3 @@
--- mod-version:2
-
 -- Zig plugin for lint+
 
 --- CONFIG ---

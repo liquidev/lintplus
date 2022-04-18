@@ -936,6 +936,17 @@ function lint.interpreter(i)
 end
 
 
+function lint.load(linter)
+  if type(linter) == "table" then
+    for _, v in ipairs(linter) do
+      require("plugins.lintplus.linters." .. v)
+    end
+  elseif type(linter) == "string" then
+    require("plugins.lintplus.linters." .. linter)
+  end
+end
+
+
 if type(config.lint) ~= "table" then
   config.lint = {}
 end

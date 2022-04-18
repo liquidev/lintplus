@@ -1,5 +1,3 @@
--- mod-version:2
-
 -- Nim plugin for lint+
 
 --- CONFIG ---

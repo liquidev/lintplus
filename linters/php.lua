@@ -1,5 +1,3 @@
--- mod-version:2
-
 -- PHP lint plugin for lint+
 
 --- CONFIG ---
