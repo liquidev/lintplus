@@ -611,16 +611,33 @@ local function kind_pretty_name(kind)
 end
 
 
-local function get_error_messages(doc)
+local function get_error_messages(doc, ordered)
   if not doc then return nil end
-  return lint.messages[core.project_absolute_path(doc.filename)]
+  local messages = lint.messages[core.project_absolute_path(doc.filename)]
+  if not messages then return nil end
+  if not ordered then return messages.lines end
+  -- sort lines
+  local lines = {}
+  for line, _ in pairs(messages.lines) do
+    table.insert(lines, line)
+  end
+  table.sort(lines, function(a, b) return a < b end)
+  local lines_info = {}
+  -- store in array instead of dictionary to keep insertion order
+  for _, line in ipairs(lines) do
+    table.insert(
+      lines_info,
+      {line = line, table.unpack(messages.lines[line])}
+    )
+  end
+  return lines_info
 end
 
 
 local function get_current_error(doc)
   local file_messages = get_error_messages(doc)
   local line, message = math.huge, nil
-  for ln, messages in pairs(file_messages.lines) do
+  for ln, messages in pairs(file_messages) do
     local msg = messages[1]
     if msg.kind == "error" and ln < line  then
       line, message = ln, msg
@@ -636,12 +653,13 @@ end
 local function goto_prev_message()
   local doc = core.active_view.doc
   local current_line = doc:get_selection()
-  local file_messages = get_error_messages(doc)
+  local file_messages = get_error_messages(doc, true)
   if file_messages ~= nil then
     local prev = nil
     local found = false
     local last = nil
-    for line, _ in pairs(file_messages.lines) do
+    for _, line_info in pairs(file_messages) do
+      local line = line_info.line
       if current_line <= line  then
         found = true
       end
@@ -661,11 +679,12 @@ end
 local function goto_next_message()
   local doc = core.active_view.doc
   local current_line = doc:get_selection()
-  local file_messages = get_error_messages(doc)
+  local file_messages = get_error_messages(doc, true)
   if file_messages ~= nil then
     local first = nil
     local next = nil
-    for line, _ in pairs(file_messages.lines) do
+    for _, line_info in pairs(file_messages) do
+      local line = line_info.line
       if not first then
         first = line
       end
@@ -687,8 +706,8 @@ local function get_status_view_items()
   local line1, _, line2, _ = doc:get_selection()
   local file_messages = get_error_messages(doc)
   if file_messages ~= nil then
-    if file_messages.lines[line1] ~= nil and line1 == line2 then
-      local msg = file_messages.lines[line1][1]
+    if file_messages[line1] ~= nil and line1 == line2 then
+      local msg = file_messages[line1][1]
       return {
         kind_pretty_name(msg.kind), ": ",
         style.text, msg.message,
