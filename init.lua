@@ -726,8 +726,8 @@ local function get_status_view_items()
 end
 
 if StatusView["add_item"] then
-  core.status_view:add_item(
-    function()
+  core.status_view:add_item({
+    predicate = function()
       local doc = core.active_view.doc
       if
         doc and doc.filename  -- skip new files
@@ -744,19 +744,20 @@ if StatusView["add_item"] then
       end
       return false
     end,
-    "lint+:message",
-    StatusView.Item.LEFT,
-    get_status_view_items,
-    function()
+    name = "lint+:message",
+    alignment = StatusView.Item.LEFT,
+    get_item = get_status_view_items,
+    command = function()
       local doc = core.active_view.doc
       local line = get_current_error(doc)
       if line ~= nil then
         doc:set_selection(line, 1, line, 1)
       end
     end,
-    -1,
-    "Lint+ error message"
-  ).separator = core.status_view.separator2
+    position = -1,
+    tooltip = "Lint+ error message",
+    separator = core.status_view.separator2
+  })
 else
   local StatusView_get_items = StatusView.get_items
   function StatusView:get_items()
