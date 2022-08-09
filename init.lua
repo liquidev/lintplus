@@ -544,7 +544,7 @@ local lens_underlines = {
 }
 
 local function draw_lens_underline(x, y, width, color)
-  local lens_style = config.lint.lens_style or "dots"
+  local lens_style = config.lint.lens_style or "solid"
   if type(lens_style) == "string" then
     local fn = lens_underlines[lens_style] or lens_underlines.blank
     fn(x, y, width, color)
