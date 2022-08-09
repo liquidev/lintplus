@@ -107,6 +107,16 @@ lint+ itself looks for the following configuration options:
   - controls the prefix prepended to messages displayed on the status bar.
     for example, setting `error` to `Error` will display `Error: …` or
     `line 10 Error: …` instead of `E: …` or `line 10 E: …`.
+- `config.lint.lens_style`
+  - string:
+    - `"blank"`: do not draw underline on line messages
+    - `"solid"`: draw single line underline on line messages (default)
+    - `"dots"`: draw dotted underline on line messages (slower performance)
+  - function(x, y, width, color): a custom drawing routine
+    - `x`: number
+    - `y`: number
+    - `width`: number
+    - `color`: renderer.color
 
 All options are unset (`nil`) by default, so eg. setting
 `config.lint.kind_pretty_names.hint` will *not* work because
