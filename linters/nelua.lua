@@ -1,9 +1,10 @@
 -- Nelua plugin for lint+
+
 --- CONFIG ---
 
 -- config.lint.nelua_mode: "analyze" | "lint"
 --   changes the linting mode, "analyze" (default) does a complete checking,
---    while "lint" only checks for syntax errors.
+--   while "lint" only checks for syntax errors.
 
 --- IMPLEMENTATION ---
 
