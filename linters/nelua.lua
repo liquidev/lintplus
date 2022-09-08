@@ -15,6 +15,7 @@ local mode = lintplus.config.nelua_mode or "analyze"
 
 if mode ~= "analyze" and mode ~= "lint" then
   core.error("lint+/nelua: invalid nelua_mode '%s'. Available modes: 'analyze', 'lint'", mode)
+  mode = "lint"
 end
 
 local command = lintplus.command {
