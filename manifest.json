@@ -1,0 +1,13 @@
+{
+  "plugins": [
+    {
+      "name": "lintplus",
+      "description": "An improved linting plugin.",
+      "version": "0.2",
+      "mod_version": "3",
+      "tags": [
+        "linter"
+      ]
+    }
+  ]
+}
