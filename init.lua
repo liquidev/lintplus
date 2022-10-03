@@ -1,4 +1,4 @@
--- mod-version:2
+-- mod-version:3
 
 -- lint+ - an improved linter for lite
 -- copyright (C) lqdev, 2020
