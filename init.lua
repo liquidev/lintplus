@@ -456,11 +456,18 @@ local function get_gutter_rail_x(dv, index)
     (rail_width(dv) + rail_spacing(dv)) * index + rail_spacing(dv)
 end
 
+
 local function get_message_group_color(messages)
   if style.lint ~= nil then
     return style.lint[messages[1].kind]
   else
-    return style.accent
+    local default_colors = {
+      info = style.syntax["normal"],
+      hint = style.syntax["function"],
+      warning = style.syntax["number"],
+      error = style.syntax["keyword2"]
+    }
+    return default_colors[messages[1].kind]
   end
 end
 
