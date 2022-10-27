@@ -111,12 +111,12 @@ function lint.get_linter_for_doc(doc)
     end
     if linter.syntax ~= nil then
       local header = doc:get_text(1, 1, doc:position_offset(1, 1, 128))
-      local syn = syntax.get(doc.filename or "", header)
+      local syn = syntax.get(doc.filename, header)
       for i = #linter.syntax, 1, -1 do
-         local s = linter.syntax[i]
-         if syn.name == s then
-           return linter, name
-         end
+        local s = linter.syntax[i]
+        if syn.name == s then
+          return linter, name
+        end
       end
     end
   end
@@ -877,7 +877,6 @@ end
 
 
 lint.filename = {}
-lint.syntax = {}
 lint.args = {}
 
 
