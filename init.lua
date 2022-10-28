@@ -32,6 +32,7 @@ local common = require "core.common"
 local config = require "core.config"
 local style = require "core.style"
 local keymap = require "core.keymap"
+local syntax = require "core.syntax"
 
 local Doc = require "core.doc"
 local DocView = require "core.docview"
@@ -107,6 +108,16 @@ function lint.get_linter_for_doc(doc)
   for name, linter in pairs(lint.index) do
     if common.match_pattern(file, linter.filename) then
       return linter, name
+    end
+    if linter.syntax ~= nil then
+      local header = doc:get_text(1, 1, doc:position_offset(1, 1, 128))
+      local syn = syntax.get(doc.filename, header)
+      for i = #linter.syntax, 1, -1 do
+        local s = linter.syntax[i]
+        if syn.name == s then
+          return linter, name
+        end
+      end
     end
   end
 end
