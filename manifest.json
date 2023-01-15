@@ -1,7 +1,8 @@
 {
-  "plugins": [
+  "addons": [
     {
-      "name": "lintplus",
+      "id": "lintplus",
+      "name": "Lint+",
       "description": "An improved linting plugin.",
       "version": "0.2",
       "mod_version": "3",
