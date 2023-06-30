@@ -90,7 +90,7 @@ automatic linting.
 
 Available commands from the lite-xl commands palette (ctrl+shift+p):
 
-* `lint+:lint` - run the appropriate linter command for the current document
+* `lint+:check` - run the appropriate linter command for the current document
 * `lint+:goto-previous-message` (alt+up) - jump to previous message on current document
 * `lint+:goto-next-message` (alt+down) - jump to next message on current document
 
