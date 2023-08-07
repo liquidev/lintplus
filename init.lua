@@ -581,16 +581,16 @@ end
 
 local DocView_draw_line_text = DocView.draw_line_text
 function DocView:draw_line_text(idx, x, y)
-  DocView_draw_line_text(self, idx, x, y)
+  local line_height = DocView_draw_line_text(self, idx, x, y)
 
   local lp = self.doc.__lintplus
-  if lp == nil then return end
+  if lp == nil then return line_height end
 
   local yy = get_underline_y(self, idx)
   local file_messages = lint.messages[core.project_absolute_path(self.doc.filename)]
-  if file_messages == nil then return end
+  if file_messages == nil then return line_height end
   local messages = file_messages.lines[idx]
-  if messages == nil then return end
+  if messages == nil then return line_height end
 
   local underline_start = messages[1].column
 
@@ -614,6 +614,7 @@ function DocView:draw_line_text(idx, x, y)
 
   local underline_width = msg_x - x - underline_x
   draw_lens_underline(x + underline_x, yy, underline_width, underline_color)
+  return line_height
 end
 
 
