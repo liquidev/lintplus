@@ -4,7 +4,7 @@ lintplus.add("lacheck") {
   filename = "%.tex$",
   procedure = {
     command = lintplus.command {
-      "lacheck", "", lintplus.filename
+      "lacheck", lintplus.filename
     },
     interpreter = lintplus.interpreter {
       -- The format for these three in Nim is almost exactly the same:
