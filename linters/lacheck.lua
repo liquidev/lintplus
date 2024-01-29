@@ -1,3 +1,5 @@
+local lintplus = require "plugins.lintplus"
+
 lintplus.add("lacheck") {
   filename = "%.tex$",
   procedure = {
