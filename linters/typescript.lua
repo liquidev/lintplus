@@ -16,7 +16,7 @@ lintplus.add("typescript") {
     command = lintplus.command(
       { 
         "eslint",
-        "--rule", "{}"
+        "--rule", "{}",
         "--format", "visualstudio",
         lintplus.filename
       }
