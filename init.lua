@@ -579,6 +579,30 @@ local function get_or_default(t, index, default)
   end
 end
 
+core.add_thread(function()
+  local minimap_found, MiniMap
+  if config.plugins.minimap ~= false then
+    minimap_found, MiniMap = pcall(require, "plugins.minimap")
+  end
+  if minimap_found then
+    local MiniMap_line_highlight_color = MiniMap.line_highlight_color
+    function MiniMap:line_highlight_color(idx, dv)
+      if dv then
+        local lp = dv.doc.__lintplus
+        local file_messages, messages
+        if lp == nil then goto fail end
+        file_messages = lint.messages[core.project_absolute_path(dv.doc.filename)]
+        if file_messages == nil then goto fail end
+        messages = file_messages.lines[idx]
+        if messages == nil then goto fail end
+        return get_message_group_color(messages)
+      end
+      ::fail::
+      return MiniMap_line_highlight_color(self, dv, idx)
+    end
+  end
+end)
+
 local DocView_draw_line_text = DocView.draw_line_text
 function DocView:draw_line_text(idx, x, y)
   local line_height = DocView_draw_line_text(self, idx, x, y)
