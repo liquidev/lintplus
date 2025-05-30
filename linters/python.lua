@@ -3,8 +3,9 @@
  lintplus.add("flake8") {
    filename = "%.py$",
    procedure = {
-     command = lintplus.command(
+     command = lintplus.args_command(
        { "flake8",
+         lintplus.args,
          lintplus.filename },
          "flake8_args"
      ),
