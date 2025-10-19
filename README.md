@@ -107,6 +107,12 @@ lint+ itself looks for the following configuration options:
   - controls the prefix prepended to messages displayed on the status bar.
     for example, setting `error` to `Error` will display `Error: …` or
     `line 10 Error: …` instead of `E: …` or `line 10 E: …`.
+- `config.lint.inline_messages`
+  - table:
+    - same keys as above
+    - values are booleans
+  - controls whether in-line messages are always displayed or only when the line is highlighted.
+  - default is `true` (always display)
 - `config.lint.lens_style`
   - string:
     - `"blank"`: do not draw underline on line messages
