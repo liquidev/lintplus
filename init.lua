@@ -602,13 +602,27 @@ function DocView:draw_line_text(idx, x, y)
   local underline_x = font:get_width(line_left)
   local w = font:get_width('w')
 
-  local msg_x = x + w * 3 + underline_x + font:get_width(line_right)
+  local highlighted = false
+  for _, cursor_line, _, _, _ in self.doc:get_selections(false) do
+    if cursor_line == idx then
+      highlighted = true
+      break
+    end
+  end
+
+  local msg_x = x + underline_x + font:get_width(line_right)
   local text_y = y + self:get_line_text_y_offset()
+  local first_message = true
   for i, msg in ipairs(messages) do
-    local text_color = get_or_default(style.lint, msg.kind, underline_color)
-    msg_x = renderer.draw_text(font, msg.message, msg_x, text_y, text_color)
-    if i < #messages then
-      msg_x = renderer.draw_text(font, ",  ", msg_x, text_y, style.syntax.comment)
+    if highlighted or get_or_default(config.lint.inline_messages, msg.kind, true) then
+      if first_message then
+        msg_x = msg_x + w * 3
+      else
+        msg_x = renderer.draw_text(font, ",  ", msg_x, text_y, style.syntax.comment)
+      end
+      local text_color = get_or_default(style.lint, msg.kind, underline_color)
+      msg_x = renderer.draw_text(font, msg.message, msg_x, text_y, text_color)
+      first_message = false
     end
   end
 
