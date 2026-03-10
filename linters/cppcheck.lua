@@ -14,7 +14,6 @@ lintplus.add("cppcheck") {
 			"--std=c++20",
 			"--check-level=normal",
 			"--suppress=missingIncludeSystem",
-			"--template={file}:{line}:{severity}:{id}:{message}",
 			"--quiet",
 			lintplus.args,
 			lintplus.filename
@@ -25,8 +24,8 @@ lintplus.add("cppcheck") {
 			local line_processed = false
 			return function ()
 				if line_processed then return nil end
-				local file, line_num, severity, code, message = line:match(
-					"^(.-):(%d+):(%w+):([^:]+):(.+)$"
+				local file, line_num, column_num, severity, message, code = line:match(
+					"^(.-):(%d+):(%d+): (%w+): (.+) %[(.-)%]"
 				)
 				if line_num then
 					line_processed = true
@@ -38,10 +37,9 @@ lintplus.add("cppcheck") {
 					else
 						kind = "hint"
 					end
-					return filename, tonumber(line_num), 1, kind, message
+					return file, tonumber(line_num), tonumber(column_num), kind, message .. " [" .. code .. "]"
 				end
 			end
 		end
 	}
 }
-
