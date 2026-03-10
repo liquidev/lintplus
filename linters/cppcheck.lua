@@ -8,16 +8,16 @@ lintplus.add("cppcheck") {
 	procedure = {
 		command = lintplus.args_command(
 			{
-      "cppcheck",
-      "--enable=all",
-      "--inline-suppr",
-      "--std=c++20",
-      "--check-level=normal",
-      "--suppress=missingIncludeSystem",
-      "--template={file}:{line}:{severity}:{id}:{message}",
-      "--quiet",
-      lintplus.args,
-      lintplus.filename
+			"cppcheck",
+			"--enable=all",
+			"--inline-suppr",
+			"--std=c++20",
+			"--check-level=normal",
+			"--suppress=missingIncludeSystem",
+			"--template={file}:{line}:{severity}:{id}:{message}",
+			"--quiet",
+			lintplus.args,
+			lintplus.filename
 			},
 		"cppcheck_args"
 		),
