@@ -125,17 +125,36 @@ end
 
 -- unused for now, because it was a bit buggy
 -- Note: Should be fixed now
-function lint.clear_messages(filename)
+function lint.clear_messages(filename, source)
   filename = core.project_absolute_path(filename)
 
   if lint.messages[filename] then
-    lint.messages[filename].lines = {}
-    lint.messages[filename].rails = {}
+    if not source then
+      -- clear everything as before
+      lint.messages[filename].lines = {}
+      lint.messages[filename].rails = {}
+    else
+      -- only clear messages from this source
+      local lines = lint.messages[filename].lines
+      for line, msgs in pairs(lines) do
+        local filtered = {}
+        for _, msg in ipairs(msgs) do
+          if msg.source ~= source then
+            table.insert(filtered, msg)
+          end
+        end
+        if #filtered > 0 then
+          lines[line] = filtered
+        else
+          lines[line] = nil
+        end
+      end
+    end
   end
 end
 
 
-function lint.add_message(filename, line, column, kind, message, rail)
+function lint.add_message(filename, line, column, kind, message, rail, source)
   filename = core.project_absolute_path(filename)
   if not lint.messages[filename] then
     -- This allows us to at least store messages until context is properly
@@ -161,6 +180,7 @@ function lint.add_message(filename, line, column, kind, message, rail)
     kind = kind,
     message = message,
     rail = rail,
+    source = source,
   })
 end
 
