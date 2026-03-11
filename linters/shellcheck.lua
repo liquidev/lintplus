@@ -15,7 +15,7 @@
 local lintplus = require "plugins.lintplus"
 
 lintplus.add("shellcheck") {
-  filename = {"%.sh$", "APKBUILD$"},
+  filename = {"%.sh$", "APKBUILD$", "PKGBUILD$"},
   syntax = {
     "Shell script",
     "shellscript",
