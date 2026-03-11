@@ -16,8 +16,9 @@ local lintplus = require "plugins.lintplus"
 
 local mode = lintplus.config.zig_mode or "ast-check"
 if mode ~= "ast-check" and mode ~= "build" then
-  core.error("lint+/zig: invalid zig_mode '%s'. "..
-             "available modes: 'ast-check', 'build'")
+  core.error(
+    "lint+/zig: invalid zig_mode '%s'. available modes: 'ast-check', 'build'"
+  )
   return
 end
 
@@ -39,7 +40,6 @@ elseif mode == "build" then
     lintplus.filename
   }, "zig_args")
 end
-
 
 lintplus.add("zig") {
   filename = "%.zig$",
