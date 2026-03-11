@@ -51,7 +51,7 @@ local function command(filename)
 end
 
 lintplus.add("luacheck") {
-  filename = "%.lua$",
+  filename = { "%.lua$", "%.rockspec$" },
   procedure = {
     command = command,
     interpreter = lintplus.interpreter {
