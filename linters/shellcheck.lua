@@ -26,7 +26,8 @@ lintplus.add("shellcheck") {
   },
   procedure = {
     command = lintplus.args_command(
-      { "shellcheck",
+      {
+        "shellcheck",
         "--format=gcc",
         lintplus.args,
         lintplus.filename

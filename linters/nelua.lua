@@ -18,20 +18,17 @@ if mode ~= "analyze" and mode ~= "lint" then
   mode = "lint"
 end
 
-local command = lintplus.command {
-  'nelua',
-  '--no-color',
-  '--'..mode,
-  lintplus.filename
-}
-
 lintplus.add 'nelua' {
   filename = '%.nelua$',
   procedure = {
-    command = command,
+    command = lintplus.command {
+      'nelua',
+      '--no-color',
+      '--'..mode,
+      lintplus.filename
+    },
     interpreter = lintplus.interpreter {
       error = "(.-):(%d+):(%d+):.-error: (.+)"
     },
   },
 }
-

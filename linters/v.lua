@@ -8,9 +8,9 @@
 --- CONFIG ---
 
 -- config.lint.v_mode: "check" | "check-syntax"
---   changes the linting mode. check scans, parses, and checks the files 
+--   changes the linting mode. check scans, parses, and checks the files
 --   without compiling the program (default),
---   check-syntax only scan and parse the files, but then stops. 
+--   check-syntax only scan and parse the files, but then stops.
 --   Useful for very quick syntax checks.
 -- config.lint.v_args: table[string]
 --   passes the given arguments to v.
@@ -22,8 +22,9 @@ local lintplus = require "plugins.lintplus"
 
 local mode = lintplus.config.v_mode or "check"
 if mode ~= "check" and mode ~= "check-syntax" then
-  core.error("lint+/v: invalid v_mode '%s'. "..
-    "available modes: 'check', 'check-syntax'")
+  core.error(
+    "lint+/v: invalid v_mode '%s'. available modes: 'check', 'check-syntax'"
+  )
   return
 end
 

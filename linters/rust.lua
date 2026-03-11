@@ -1,31 +1,21 @@
 -- Rust plugin for lint+
 
-
 --- IMPLEMENTATION ---
 
-
-local common = require "core.common"
 local core = require "core"
-
 local lintplus = require "plugins.lintplus"
 local json = require "plugins.lintplus.json"
 
-
 -- common functions
-
 
 local function no_op() end
 
-
 local function parent_directories(filename)
-
   return function ()
     filename = lintplus.fs.parent_directory(filename)
     return filename
   end
-
 end
-
 
 -- message processing
 
@@ -45,12 +35,7 @@ local function message_spans_multiple_lines(message, line)
   return false
 end
 
-local function process_message(
-  context,
-  message,
-  out_messages,
-  rail
-)
+local function process_message(context, message, out_messages, rail)
   local msg = message.message
   local span = message.spans[1]
 
@@ -106,14 +91,12 @@ local function process_message(
   end
 end
 
-
 local function get_messages(context, event)
   -- filename, line, column, kind, message
   local messages = {}
   process_message(context, event.message, messages)
   return messages
 end
-
 
 -- linter
 
